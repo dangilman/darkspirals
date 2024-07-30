@@ -16,14 +16,23 @@ class DistributionFunctionIsothermal(DistributionFunctionBase):
         :param units:
         :param fit_midplane:
         """
+        self._action = action
         self._velocity_dispersion = velocity_dispersion
         self._vertical_frequency = vertical_frequency
-        super(DistributionFunctionIsothermal, self).__init__(action,
-                                                             vertical_frequency,
-                                                             z_coords,
+        super(DistributionFunctionIsothermal, self).__init__(z_coords,
                                                              vz_coords,
                                                              units,
                                                              fit_midplane)
+
+    def update_params(self, velocity_dispersion=None, vertical_frequency=None):
+        """
+        Update the velocity dispersion of the df
+        :return:
+        """
+        if velocity_dispersion is not None:
+            self._velocity_dispersion = velocity_dispersion
+        if vertical_frequency is not None:
+            self._vertical_frequency = vertical_frequency
 
     @property
     def function(self):
@@ -31,7 +40,7 @@ class DistributionFunctionIsothermal(DistributionFunctionBase):
         Calculates an isothermal distribution function given the action, vertical frequency, and velocity dispersion
         :return: the numerical value of the distribution function
         """
-        exp_argument = -self._J * self._vertical_freq / self._velocity_dispersion ** 2
+        exp_argument = -self._action * self._vertical_frequency / self._velocity_dispersion ** 2
         return 1.0 / np.sqrt(2 * np.pi) / self._velocity_dispersion * np.exp(exp_argument)
 
 class DistributionFunctionLiandWidrow2021(DistributionFunctionBase):
@@ -55,6 +64,8 @@ class DistributionFunctionLiandWidrow2021(DistributionFunctionBase):
         self._velocity_dispersion = velocity_dispersion
         self._vertical_frequency = vertical_frequency
         self._alpha = alpha
+        self._solve_Ez = solve_Ez
+        self._action = action
         if solve_Ez:
             aaV_inverse = actionAngleInverse(pot=vertical_potential, nta=2 * 128,
                                                      Es=np.linspace(0., 2.5, 1501),
@@ -66,12 +77,28 @@ class DistributionFunctionLiandWidrow2021(DistributionFunctionBase):
             self._Ez = Ez.reshape(action.shape)
         else:
             self._Ez = action * vertical_frequency
-        super(DistributionFunctionLiandWidrow2021, self).__init__(action,
-                                                         vertical_frequency,
+        super(DistributionFunctionLiandWidrow2021, self).__init__(
                                                          z_coords,
                                                          vz_coords,
                                                          units,
                                                          fit_midplane)
+
+    def update_params(self, velocity_dispersion=None, alpha=None, vertical_frequency=None):
+        """
+        Update the parameters of the vdf; velocity dispersion should be set in physical units (km/sec), while
+        vertical frequency is expected to be in internal galpy units
+        :return:
+        """
+        if velocity_dispersion is not None:
+            self._velocity_dispersion = velocity_dispersion / self._units['vo']
+        if alpha is not None:
+            self._alpha = alpha
+        if vertical_frequency is not None:
+            if self._solve_Ez:
+                raise Exception('cannot update the vertical frequency if energies are being explicitely solved '
+                                'for (solve_Ez=True')
+            self._vertical_frequency = vertical_frequency
+            self._Ez = self._J * vertical_frequency
 
     @property
     def function(self):

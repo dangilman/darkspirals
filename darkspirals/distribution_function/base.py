@@ -6,22 +6,17 @@ from scipy.integrate import simps
 
 class DistributionFunctionBase(object):
 
-    def __init__(self, action, vertical_freq, z_coords, vz_coords, units, fit_midplane):
+    def __init__(self, z_coords, vz_coords, units, fit_midplane):
         """
 
-        :param action: the vertical action in internal units
-        :param vertical_freq:the vertical frequency in internal units
         :param z_coords: the z-coordinates of phase space in internal units
         :param vz_coords: the vz-coordinates of phase space in internal units
         :param units: the internal units used by galpy
         :param fit_midplane: bool; compute the z-coordinate of the midplane
         """
-        (n, n) = action.shape
-        assert len(z_coords) == n
+        n = len(z_coords)
         assert len(vz_coords) == n
         self._n = n
-        self._J = action  # in internal units
-        self._vertical_freq = vertical_freq  # in internal units
         self._v = np.array(vz_coords) / units['vo']  # velocity domain in km/sec
         self._z = np.array(z_coords) / units['ro']
         self._units = units
@@ -33,6 +28,14 @@ class DistributionFunctionBase(object):
         df = self.function
         self.interp_df = RegularGridInterpolator(points_interp, df)
         self.interp_df_normalized = RegularGridInterpolator(points_interp, df / np.max(df))
+
+    def update_params(self, *args, **kwargs):
+        """
+        Changes the parameters describing the distribution function, this is model-specific so it should be defined
+        separately for each distribution function class
+        :return:
+        """
+        raise Exception('update params not defined for this class')
 
     def frequency_angle_representation(self, disc, N_samples=10**7):
         """

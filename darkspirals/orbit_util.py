@@ -3,7 +3,7 @@ import numpy as np
 import astropy.units as apu
 from galpy.potential import evaluatezforces
 from galpy.util.conversion import force_in_2piGmsolpc2
-from galpy.potential import turn_physical_off
+from galpy.potential import turn_physical_off, MovingObjectPotential
 
 
 class OrbitExtension(Orbit):
@@ -78,20 +78,21 @@ class OrbitExtension(Orbit):
             dj *= disc.units['ro'] * disc.units['vo']
         return dj
 
-def integrate_single_orbit(orbit_init, disc, ro=8., vo=220., radec=True):
+def integrate_single_orbit(orbit_init, disc, ro=8., vo=220., radec=True, lmc_orbit=None, lmc_potential=None):
 
     """
     This function integrates an orbit in a potential with initial conditions orbit_init over a time
     time_Gyr
 
-    :param orbit_init: orbit initialization (see documentation in galpy.Orbit)
-    :param disc: an instance of the Disc class
-    :param ro: length scale for conversion to galpy internal units
-    :param vo: velocity scale for conversion to galpy internal units
-    :return: Instance of galpy.Oribt
     """
     satellite_orbit = OrbitExtension(vxvv=orbit_init, radec=radec, ro=ro, vo=vo)
-    satellite_orbit.integrate(disc.time_internal_eval, disc.galactic_potential)  # Integrate orbit
+    if lmc_orbit is None:
+        satellite_orbit.integrate(disc.time_internal_eval, disc.galactic_potential)  # Integrate orbit
+    else:
+        lmc_pot = MovingObjectPotential(lmc_orbit,
+                                        lmc_potential)
+        pot = disc.galactic_potential + lmc_pot
+        satellite_orbit.integrate(disc.time_internal_eval, pot)
     satellite_orbit.turn_physical_off()
     dr_min, t_min = orbit_closest_approach(disc, satellite_orbit)
     satellite_orbit.set_closest_approach(dr_min, t_min)

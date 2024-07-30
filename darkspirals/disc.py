@@ -19,7 +19,7 @@ class Disc(object):
 
     def __init__(self, local_potential, galactic_potential, z_min_max_kpc, vz_min_max_kpc, phase_space_pixels,
                  time_Gyr_eval, units_ro=8.0, units_vo=220.0, compute_action_angle=True,
-                 parallelize_action_angle_computation=True, compute_upfront=True):
+                 parallelize_action_angle_computation=True, compute_upfront=True, r_over_r0=1.178):
         """
 
         :param local_potential:
@@ -44,6 +44,7 @@ class Disc(object):
         self.galactic_potential = galactic_potential
         self.time_Gyr_eval = time_Gyr_eval
         self.units = {'ro': units_ro, 'vo': units_vo}
+        self._r_over_r0 = r_over_r0
         try:
             self.time_internal_eval = self.time_to_internal_time(time_Gyr_eval.value)
         except:
@@ -246,10 +247,9 @@ class Disc(object):
         :param time_Gyr: the time in Gyr
         :return: the x, y coordinate the solar position in internal units
         """
-        r_over_r0 = 1.0
-        freq = self.circular_velocity / r_over_r0
-        x_solar = r_over_r0 * np.cos(freq * self.time_internal_eval)
-        y_solar = r_over_r0 * np.sin(freq * self.time_internal_eval)
+        freq = self.circular_velocity / self._r_over_r0
+        x_solar = self._r_over_r0 * np.cos(freq * self.time_internal_eval)
+        y_solar = self._r_over_r0 * np.sin(freq * self.time_internal_eval)
         return x_solar, y_solar
 
     @property

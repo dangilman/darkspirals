@@ -73,7 +73,7 @@ class SubstructureRealization(object):
 
     def add_dwarf_galaxies(self, tidal_mass_loss=0.0, add_orbit_uncertainties=True,
                            additional_orbits=None, additional_mpeak=None,
-                           include_dwarf_list=[], log10_m_peak_dict={}):
+                           include_dwarf_list=[], log10_m_peak_dict={}, LMC_effect=False):
 
         if self._dwarf_galaxies_added is False:
             if include_dwarf_list is None:
@@ -86,19 +86,27 @@ class SubstructureRealization(object):
                                    'UrsaMajorII': 8.022538644978852, 'Sculptor': 9.209954326846466, 'Fornax': 9.687089395359479,
                                      'TucanaIII': 7.7}
             else:
-                include_dwarf_list = []
-                log10_m_peak_dict = {}
+                assert len(include_dwarf_list) == len(log10_m_peak_dict.keys())
 
             dwarf_potentials = []
             orbits = []
             dwarf_galaxy_masses = []
+            if LMC_effect:
+                LMC_mass = 1.38 * 10 ** 3
+                c = sample_concentration_herquist(LMC_mass)
+                LMC_potential = HernquistPotential(amp=0.5 * LMC_mass * apu.solMass, a=c * apu.kpc)
+                lmc_orbit = Orbit.from_name('LMC')
+                lmc_orbit.integrate(disc.time_internal_eval, disc.galactic_potential)
+                lmc_orbit.turn_physical_off()
+            else:
+                lmc_orbit = None
             for name in include_dwarf_list:
                 m = 10**(log10_m_peak_dict[name] + tidal_mass_loss)
                 c = sample_concentration_nfw(m)
                 pot = NFWPotential(mvir=m / 10 ** 12, conc=c)
                 dwarf_potentials.append(pot)
                 orb_init = sample_dwarf_orbit_init(name, self._disc.units, add_orbit_uncertainties)
-                orbit = integrate_single_orbit(orb_init, self._disc)
+                orbit = integrate_single_orbit(orb_init, self._disc, lmc_orbit=lmc_orbit)
                 impact_distance, impact_time = orbit.closest_approach, orbit.impact_time
                 orbit.set_closest_approach(impact_distance, impact_time)
                 orbits.append(orbit)
