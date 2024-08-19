@@ -317,5 +317,8 @@ class Disc(object):
         :param time: time in Gyr
         :return: time expressed in internal time units
         """
-        t = time_Gyr.value / time_in_Gyr(self.units['vo'], self.units['ro'])
+        try:
+            t = time_Gyr.value / time_in_Gyr(self.units['vo'], self.units['ro'])
+        except:
+            t = time_Gyr / time_in_Gyr(self.units['vo'], self.units['ro'])
         return t

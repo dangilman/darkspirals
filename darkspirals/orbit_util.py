@@ -2,14 +2,25 @@ from galpy.orbit import Orbit
 import numpy as np
 import astropy.units as apu
 from galpy.potential import evaluatezforces
+from galpy.util.conversion import time_in_Gyr
 from galpy.util.conversion import force_in_2piGmsolpc2
 from galpy.potential import turn_physical_off, MovingObjectPotential
 
 
 class OrbitExtension(Orbit):
     """
-    Endows galpy's orbit class with an "closest_approach" property
+    Endow galpy's orbit class with some new properties
     """
+
+    def minimum_distance_galactic_center(self, time_gyr, ro=8.0, vo=220.0):
+        """
+        Compute the minimum distance from the galactic center
+        """
+        t_internal = time_gyr / time_in_Gyr(vo, ro)
+        x, z, y = self.x(t_internal), self.y(t_internal), self.z(t_internal)
+        r_min = np.min(np.sqrt(x**2 + y**2 + z**2))
+        return r_min * ro
+
     def set_closest_approach(self, r_min, t_min):
         """
         Set the minimum distance from the solar neighborhood of an orbit
@@ -47,6 +58,20 @@ class OrbitExtension(Orbit):
             return self._force_array
         else:
             return None
+
+    def impact_velocity(self, ro=8.0, vo=220.0):
+        """
+        Compute the velocity at the minimum separation from the solar position
+        :param ro:
+        :param vo:
+        :return:
+        """
+        t_min = self.impact_time
+        if t_min is None:
+            raise Exception('must integrate orbits before computing impact velocity')
+        t_min_internal = t_min / time_in_Gyr(vo, ro)
+        v = np.sqrt(self.vx(-t_min_internal) ** 2 + self.vy(-t_min_internal) ** 2  + self.vz(-t_min_internal)**2)
+        return v * vo
 
     def force_exerted(self, disc, satellite_potential, physical_units=False):
         """

@@ -1,4 +1,5 @@
-from darkspirals.distribution_function.df_models import  DistributionFunctionIsothermal, DistributionFunctionLiandWidrow2021
+from darkspirals.distribution_function.df_models import  DistributionFunctionIsothermal, \
+    DistributionFunctionLiandWidrow2021
 from copy import deepcopy
 
 def compute_df_from_orbits(disc_model,
@@ -60,7 +61,6 @@ def compute_df_from_orbits(disc_model,
                                                            nproc=10)
             if verbose:
                 print('done.')
-
         else:
             deltaJ_list = []
             if verbose:

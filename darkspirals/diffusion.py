@@ -70,9 +70,9 @@ class DiffusionConvolution(DiffusionBase):
         """
         if diffusion_coefficients is None:
             if df_model == 'ISOTHERMAL':
-                diffusion_coefficients = (0.021, 1.47)
+                diffusion_coefficients = (0.042, 1.47)
             else:
-                diffusion_coefficients = (0.028, 1.47)
+                diffusion_coefficients = (0.045, 1.47)
         j0 = np.mean(self._disc_model.action)
         omega0 = np.mean(self._disc_model.frequency)
         tau = abs(impact_time_gyr) / diffusion_timescale

@@ -73,10 +73,10 @@ class SubstructureRealization(object):
 
     def add_dwarf_galaxies(self, tidal_mass_loss=0.0, add_orbit_uncertainties=True,
                            additional_orbits=None, additional_mpeak=None,
-                           include_dwarf_list=[], log10_m_peak_dict={}, LMC_effect=False):
+                           include_dwarf_list='DEFAULT', log10_m_peak_dict={}, LMC_effect=False):
 
         if self._dwarf_galaxies_added is False:
-            if include_dwarf_list is None:
+            if include_dwarf_list == 'DEFAULT':
                 include_dwarf_list = ['Sculptor', 'LeoI', 'LeoII', 'Fornax', 'UrsaMinor', 'UrsaMajorII', 'Draco',
                                           'Willman1', 'BootesI',
                                           'SegueI', 'SegueII', 'Hercules', 'TucanaIII']
@@ -92,21 +92,25 @@ class SubstructureRealization(object):
             orbits = []
             dwarf_galaxy_masses = []
             if LMC_effect:
-                LMC_mass = 1.38 * 10 ** 3
-                c = sample_concentration_herquist(LMC_mass)
-                LMC_potential = HernquistPotential(amp=0.5 * LMC_mass * apu.solMass, a=c * apu.kpc)
-                lmc_orbit = Orbit.from_name('LMC')
-                lmc_orbit.integrate(disc.time_internal_eval, disc.galactic_potential)
+                LMC_mass = 1.38 * 10 ** 11
+                c = sample_concentration_nfw(LMC_mass)
+                lmc_pot = NFWPotential(mvir=LMC_mass / 10 ** 12, conc=c)
+                lmc_orbit = sample_dwarf_orbit_init('LMC', self._disc.units, False)
+                lmc_orbit.integrate(self._disc.time_internal_eval, self._disc.galactic_potential)
                 lmc_orbit.turn_physical_off()
             else:
                 lmc_orbit = None
+                lmc_pot = None
             for name in include_dwarf_list:
                 m = 10**(log10_m_peak_dict[name] + tidal_mass_loss)
                 c = sample_concentration_nfw(m)
                 pot = NFWPotential(mvir=m / 10 ** 12, conc=c)
                 dwarf_potentials.append(pot)
                 orb_init = sample_dwarf_orbit_init(name, self._disc.units, add_orbit_uncertainties)
-                orbit = integrate_single_orbit(orb_init, self._disc, lmc_orbit=lmc_orbit)
+                orbit = integrate_single_orbit(orb_init,
+                                               self._disc,
+                                               lmc_orbit=lmc_orbit,
+                                               lmc_potential=lmc_pot)
                 impact_distance, impact_time = orbit.closest_approach, orbit.impact_time
                 orbit.set_closest_approach(impact_distance, impact_time)
                 orbits.append(orbit)
