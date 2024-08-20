@@ -29,10 +29,8 @@ class DiffusionBase(object):
         for dj, t_gyr in zip(deltaJ_list, impact_time_gyr_list):
             arg = (dj, t_gyr, df_model, diffusion_coefficients, diffusion_timescale)
             arg_list.append(arg)
-        with mp.Pool(processes=nproc) as pool:
-            results = tqdm(
-                pool.map(self._call_parallel, arg_list)
-            )
+        with mp.Pool(processes=n_cpu) as pool:
+            results = pool.map(self._call_parallel, arg_list)
         return results
 
     def _call_parallel(self, x):
@@ -132,9 +130,9 @@ class DiffusionConvolutionSpatiallyVarying(DiffusionBase):
         """
         if diffusion_coefficients is None:
             if df_model == 'ISOTHERMAL':
-                diffusion_coefficients = (0.042, 1.47)
+                diffusion_coefficients = (0.1, 1.7)
             else:
-                diffusion_coefficients = (0.045, 1.47)
+                diffusion_coefficients = (0.11, 1.7)
 
         j0 = self._disc_model.action
         omega0 = self._disc_model.frequency
