@@ -11,7 +11,7 @@ class OrbitExtension(Orbit):
     """
     Endow galpy's orbit class with some new properties
     """
-
+    force_array_computed = False
     def minimum_distance_galactic_center(self, time_gyr, ro=8.0, vo=220.0):
         """
         Compute the minimum distance from the galactic center
@@ -36,6 +36,7 @@ class OrbitExtension(Orbit):
         :param force:
         :return:
         """
+        self.force_array_computed = True
         self._force_array = force
 
     @property

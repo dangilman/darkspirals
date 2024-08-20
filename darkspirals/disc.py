@@ -13,6 +13,7 @@ from scipy.integrate import simps
 from galpy.potential import turn_physical_off
 import os
 from tqdm import tqdm
+import multiprocessing as mp
 
 
 class Disc(object):
@@ -60,7 +61,7 @@ class Disc(object):
                 _ = self.action_angle_interp
             _ = self.orbits_in_phase_space
 
-    def compute_deltaJ_from_forces(self, forces, second_order=False, verbose=False):
+    def compute_deltaJ_from_forces(self, forces, second_order=False, verbose=False, parallel=False, n_cpu=6):
         """
         Compute the change to the vertical action from an external force
         :param forces: a list of forces acting on the phase space, each force must have shape (n, n, len(time_eval_internal)
@@ -78,7 +79,7 @@ class Disc(object):
                 omega = freq_0 + f / dj_dz
             else:
                 omega = freq_0
-            dJ = simps(v_z * f / omega, dx=time_step)
+            dJ = np.squeeze(simps(v_z * f / omega, dx=time_step))
             delta_J_list.append(dJ)
             if verbose and counter%25==0:
                 percent_done = int(100*counter/len(forces))
@@ -87,7 +88,8 @@ class Disc(object):
 
     def compute_satellite_forces(self, satellite_orbit_list=None,
                                  satellite_potentials_list=None,
-                                 verbose=False):
+                                 verbose=False,
+                                 parallel=False, n_cpu=6):
 
         """
         Computes the vertical forces from a list of passing satellites
@@ -103,21 +105,33 @@ class Disc(object):
         force_list = []
         impact_times = []
         impact_parameters = []
-        progress = 0
-        for i in range(0, len(satellite_orbit_list)):
-            satellite_force = satellite_orbit_list[i].force_exerted_array
-            if satellite_force is None:
-                satellite_force = satellite_vertical_force(self,
-                                                       satellite_orbit_list[i],
-                                                       satellite_potentials_list[i],
-                                                       z_coord=self.orbits_in_phase_space.x(self.time_internal_eval),
-                                                        record_force_array=True)
-            force_list.append(satellite_force)
-            impact_times.append(satellite_orbit_list[i].impact_time)
-            impact_parameters.append(satellite_orbit_list[i].closest_approach)
-            if verbose and i%25==0:
-                percent_done = int(100*i/len(satellite_orbit_list))
-                print('completed '+str(percent_done)+'% of force calculations... ')
+        z_coord = self.orbits_in_phase_space.x(self.time_internal_eval)
+        if parallel:
+            arg_list = []
+            for orbit, potential in zip(satellite_orbit_list, satellite_potentials_list):
+                arg = (self, orbit, potential, z_coord, True)
+                arg_list.append(arg)
+            with mp.Pool(processes=n_cpu) as pool:
+                force_list = tqdm(
+                    pool.starmap(satellite_vertical_force, arg_list)
+                )
+            impact_times = [orbit.impact_time for orbit in satellite_orbit_list]
+            impact_parameters = [orbit.closest_approach for orbit in satellite_orbit_list]
+        else:
+            for i in range(0, len(satellite_orbit_list)):
+                satellite_force = satellite_orbit_list[i].force_exerted_array
+                if satellite_force is None:
+                    satellite_force = satellite_vertical_force(self,
+                                                           satellite_orbit_list[i],
+                                                           satellite_potentials_list[i],
+                                                           z_coord=z_coord,
+                                                            record_force_array=True)
+                force_list.append(satellite_force)
+                impact_times.append(satellite_orbit_list[i].impact_time)
+                impact_parameters.append(satellite_orbit_list[i].closest_approach)
+                if verbose and i%25==0:
+                    percent_done = int(100*i/len(satellite_orbit_list))
+                    print('completed '+str(percent_done)+'% of force calculations... ')
         return force_list, np.array(impact_times), np.array(impact_parameters)
 
     @property
