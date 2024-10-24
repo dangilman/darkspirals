@@ -129,13 +129,7 @@ class DiffusionConvolutionSpatiallyVarying(DiffusionBase):
         :return:
         """
         if diffusion_coefficients is None:
-            if df_model == 'ISOTHERMAL':
-                diffusion_coefficients = (0.1, 1.7)
-            else:
-                diffusion_coefficients = (0.11, 1.7)
-
-        j0 = self._disc_model.action
-        omega0 = self._disc_model.frequency
+            diffusion_coefficients = (0.125, 1.9)
 
         tau = abs(impact_time_gyr) / diffusion_timescale
         prefactor = diffusion_coefficients[0] * tau ** diffusion_coefficients[1]
@@ -156,8 +150,6 @@ class DiffusionConvolutionSpatiallyVarying(DiffusionBase):
         z_step = z_coords[1] - z_coords[0]
         vz_step = vz_coords[1] - vz_coords[0]
         dJ = np.ones_like(deltaJ).ravel()
-        z_coords_shifted = z_coords[1:] - z_step / 2
-        vz_coords_shifted = vz_coords[1:] - vz_step / 2
         r = np.zeros_like(self._disc_model.action)
         (N, N) = self._disc_model.action.shape
         for z_i in z_coords:
