@@ -37,6 +37,33 @@ class DistributionFunctionBase(object):
         """
         raise Exception('update params not defined for this class')
 
+    def frequency_angle_representation_grid(self, disc, N_samples=10**7, nbins=50):
+        """
+        Derives the distribution function in frequency-angle coordinates on a grid
+        This is essentially the same calculation as in frequency_angle_representation, however, this allows for much
+        higher sampling because the histogram is iteratively updated during the sampling, rather than doing all of the
+        sampling up front, which consumes a lot of RAM
+        :param disc: an instance of Disc used to compute the frequency angle coordinates
+        :param N_samples: the number of samples to draw from the phase space distribution
+        :return: frequency coordinates, angle coordinates, and importance weights
+        """
+        N_samples = int(N_samples)
+        blocks = int(2e7)
+        n_blocks = int(N_samples / blocks)
+        h = 0
+        for i in range(0, n_blocks):
+            freq, angle, weights = self.frequency_angle_representation(disc, blocks)
+            phys_gyr = 28.05
+            max_freq = np.max(freq)
+            min_freq = 50.0 / phys_gyr
+            freq_range = (min_freq, max_freq)
+            angle_range = (0, 2 * np.pi)
+            hist_range = (freq_range, angle_range)
+            _h, angle_vals, freq_vals = np.histogram2d(freq, angle, weights=weights, range=hist_range, bins=nbins)
+            h += _h
+
+        return h/n_blocks, angle_range, freq_range
+
     def frequency_angle_representation(self, disc, N_samples=10**7):
         """
         Derives the distribution function in frequency-angle coordinates
@@ -44,7 +71,7 @@ class DistributionFunctionBase(object):
         :param N_samples: the number of samples to draw from the phase space distribution
         :return: frequency coordinates, angle coordinates, and importance weights
         """
-        n_samples = int(N_samples)
+        N_samples = int(N_samples)
         zmin_max = float(np.max(np.absolute(self._z * self._units['ro'])))
         vmin_max = float(np.max(np.absolute(self._v * self._units['vo'])))
         samples_z = np.random.uniform(-zmin_max, zmin_max, N_samples)
@@ -55,16 +82,20 @@ class DistributionFunctionBase(object):
         action, angle, freq = out[:, 0], out[:, 1], out[:, 2]
         return freq, angle, weights
 
-    def mean_vertical_velocity(self, z=None):
+    def mean_vertical_velocity(self, z=None, subtract_mean=False):
         """
 
         :param z:
         :return:
         """
-        domain = self._v * self._units['vo']
+        domain = self._z * self._units['ro']
         vz_mean = self.mean_v_relative
         if z is None:
-            return np.array(domain), np.array(vz_mean)
+            if subtract_mean:
+                vz_out = np.array(vz_mean) - np.mean(vz_mean)
+                return np.array(domain), vz_out
+            else:
+                return np.array(domain), np.array(vz_mean)
         else:
             vz_mean_interp = interp1d(domain, vz_mean)
             vz_mean = []
@@ -72,9 +103,13 @@ class DistributionFunctionBase(object):
             for i in range(0, len(z) - 1):
                 z_array = np.linspace(z[i], z[i + 1], 20)
                 meanv = np.mean(np.squeeze(vz_mean_interp(z_array)))
-                vz_mean.append(asym)
+                vz_mean.append(meanv)
                 z_midpoint = (z[i + 1] + z[i]) / 2
                 domain.append(z_midpoint)
+            domain = np.array(domain)
+            vz_mean = np.array(vz_mean)
+            if subtract_mean:
+                vz_mean -= np.mean(vz_mean)
             return np.array(domain), np.array(vz_mean)
 
     def vertical_asymmetry(self, z=None):

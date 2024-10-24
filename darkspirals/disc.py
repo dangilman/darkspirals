@@ -89,16 +89,17 @@ class Disc(object):
     def compute_satellite_forces(self, satellite_orbit_list=None,
                                  satellite_potentials_list=None,
                                  verbose=False,
-                                 parallel=False, n_cpu=6):
+                                 parallel=False, n_cpu=6,
+                                 t_max=None):
 
         """
         Computes the vertical forces from a list of passing satellites
         :param satellite_orbit_list: list of Orbit instances for each satellite
         :param satellite_potentials_list: list of potentials corresponding to each satellite
         :param verbose: make print statements
+        :param t_max: the lookback time over which to return the force exerted, should specify a time in the past (<0)
         :return: a list of vertical forces, impact times (time of maximum force), and impact parameters (minimum distance)
          for satellites
-
          All quantities returned in internal units
         """
         assert len(satellite_orbit_list) == len(satellite_potentials_list)
@@ -109,7 +110,7 @@ class Disc(object):
         if parallel:
             arg_list = []
             for orbit, potential in zip(satellite_orbit_list, satellite_potentials_list):
-                arg = (self, orbit, potential, z_coord, True)
+                arg = (self, orbit, potential, z_coord, True, t_max)
                 arg_list.append(arg)
             with mp.Pool(processes=n_cpu) as pool:
                 force_list = tqdm(
@@ -125,7 +126,8 @@ class Disc(object):
                                                            satellite_orbit_list[i],
                                                            satellite_potentials_list[i],
                                                            z_coord=z_coord,
-                                                            record_force_array=True)
+                                                            record_force_array=True,
+                                                               t_max=t_max)
                 force_list.append(satellite_force)
                 impact_times.append(satellite_orbit_list[i].impact_time)
                 impact_parameters.append(satellite_orbit_list[i].closest_approach)

@@ -41,7 +41,10 @@ class DistributionFunctionIsothermal(DistributionFunctionBase):
         :return: the numerical value of the distribution function
         """
         exp_argument = -self._action * self._vertical_frequency / self._velocity_dispersion ** 2
-        return 1.0 / np.sqrt(2 * np.pi) / self._velocity_dispersion * np.exp(exp_argument)
+        df = 1.0 / np.sqrt(2 * np.pi) / self._velocity_dispersion * np.exp(exp_argument)
+        num_pixels = len(exp_argument.ravel())
+        normalization = np.sum(df) / num_pixels
+        return 1.0 / np.sqrt(2 * np.pi) / self._velocity_dispersion * np.exp(exp_argument) / normalization
 
 class DistributionFunctionLiandWidrow2021(DistributionFunctionBase):
 
@@ -107,4 +110,6 @@ class DistributionFunctionLiandWidrow2021(DistributionFunctionBase):
         :return: the numerical value of the distribution function
         """
         df = (1 + self._Ez / (self._alpha * self._velocity_dispersion**2)) ** -self._alpha
-        return df
+        num_pixels = len(self._Ez.ravel())
+        normalization = np.sum(df) / num_pixels
+        return df / normalization

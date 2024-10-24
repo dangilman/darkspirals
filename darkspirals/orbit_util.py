@@ -74,35 +74,48 @@ class OrbitExtension(Orbit):
         v = np.sqrt(self.vx(-t_min_internal) ** 2 + self.vy(-t_min_internal) ** 2  + self.vz(-t_min_internal)**2)
         return v * vo
 
-    def force_exerted(self, disc, satellite_potential, physical_units=False):
+    def force_exerted(self, disc, satellite_potential, physical_units=False, t_max=None):
         """
-        Compute the force exerted at the solar position by a satellite
+
         :param disc: an instance of Disc
-        :param satellite_potential: the potential of the satellite
-        :return: the force as a function of time on the solar position
+        :param satellite_potential: a potential instance in galpy for the satellite
+        :param physical_units: bool; give output in physical units rather than internal galpy units
+        :param t_max: the lookback time over which to return the force exerted, should specify a time in the past (<0)
+        :return: the force exerted by the satellite as a function of time at the solar position
         """
         f = satellite_vertical_force(disc,
                                      self,
                                      satellite_potential)
         if physical_units:
             f *= force_in_2piGmsolpc2(**disc.units)
-        return f
+        if t_max is None:
+            return f
+        else:
+            if t_max > 0.0:
+                t_max *= -1
+                print('you specified a time t_max that is positive, suggesting you want to know the orbit in the future. '
+                      'Orbit info. is only stored in the past. Assuming you meant t_max = -t_max... ')
+            t_max_internal = disc.time_to_internal_time(t_max)
+            index_break = np.where(disc.time_internal_eval>=t_max_internal)[0][0]
+            return f[index_break:]
 
-    def deltaJ(self, disc, satellite_potential, physical_units=False):
+    def deltaJ(self, disc, satellite_potential, physical_units=False, t_max=None):
         """
         Compute the perturbation to the action at the solar position
         :param disc:
         :param satellite_potential:
         :param physical_units:
+        :param t_max: the lookback time over which to return the force exerted, should specify a time in the past (<0)
         :return:
         """
         f, _, _ = disc.compute_satellite_forces(satellite_orbit_list=[self],
                                           satellite_potentials_list=[satellite_potential],
-                                          )
+                                          t_max=t_max)
         dj = disc.compute_deltaJ_from_forces(f)[0]
         if physical_units:
             dj *= disc.units['ro'] * disc.units['vo']
         return dj
+
 
 def integrate_single_orbit(orbit_init, disc, ro=8., vo=220., radec=True, lmc_orbit=None, lmc_potential=None):
 
@@ -297,7 +310,7 @@ def sample_dwarf_orbit_uncertainty(name):
     return uncertainty
 
 def satellite_vertical_force(disc, satellite_orbit, satellite_potential,
-                             z_coord=0.0, record_force_array=False):
+                             z_coord=0.0, record_force_array=False, t_max=None):
     """
     Calculates the force from a passing satellite on the solar neighborhood as a function of time
     :param disc:
@@ -306,10 +319,14 @@ def satellite_vertical_force(disc, satellite_orbit, satellite_potential,
     :param record_force_array: bool; if True, then the Orbit instance will aquire a 'force_exerted' attribute for use
     in the calculation of perturbations to the full distribution function. This is intended to avoid multiple expensive
      calculations of the same quantity
+    :param t_max: the lookback time over which to return the force exerted, should specify a time in the past (<0)
     :return:
     """
     x_solar, y_solar = disc.solar_circle
     t_eval_internal = disc.time_internal_eval
+    if t_max is not None:
+        index_break = np.where(t_eval_internal >= disc.time_to_internal_time(t_max))[0][0]
+        t_eval_internal = t_eval_internal[index_break:]
     satellite_orbit.turn_physical_off()
     dx = x_solar - satellite_orbit.x(t_eval_internal)
     dy = y_solar - satellite_orbit.y(t_eval_internal)
