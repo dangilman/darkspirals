@@ -12,6 +12,7 @@ class OrbitExtension(Orbit):
     Endow galpy's orbit class with some new properties
     """
     force_array_computed = False
+
     def minimum_distance_galactic_center(self, time_gyr, ro=8.0, vo=220.0):
         """
         Compute the minimum distance from the galactic center
@@ -80,7 +81,7 @@ class OrbitExtension(Orbit):
         :param disc: an instance of Disc
         :param satellite_potential: a potential instance in galpy for the satellite
         :param physical_units: bool; give output in physical units rather than internal galpy units
-        :param t_max: the lookback time over which to return the force exerted, should specify a time in the past (<0)
+        :param t_max: force is set to zero for t < t_max (t_max is < 0)
         :return: the force exerted by the satellite as a function of time at the solar position
         """
         f = satellite_vertical_force(disc,
@@ -96,8 +97,9 @@ class OrbitExtension(Orbit):
                 print('you specified a time t_max that is positive, suggesting you want to know the orbit in the future. '
                       'Orbit info. is only stored in the past. Assuming you meant t_max = -t_max... ')
             t_max_internal = disc.time_to_internal_time(t_max)
-            index_break = np.where(disc.time_internal_eval>=t_max_internal)[0][0]
-            return f[index_break:]
+            indexes = np.where(disc.time_internal_eval<t_max_internal)[0]
+            f[indexes] = 0.0
+            return f
 
     def deltaJ(self, disc, satellite_potential, physical_units=False, t_max=None):
         """
@@ -105,7 +107,7 @@ class OrbitExtension(Orbit):
         :param disc:
         :param satellite_potential:
         :param physical_units:
-        :param t_max: the lookback time over which to return the force exerted, should specify a time in the past (<0)
+        :param t_max: force is set to zero for t < t_max (t_max is < 0)
         :return:
         """
         f, _, _ = disc.compute_satellite_forces(satellite_orbit_list=[self],
@@ -116,8 +118,8 @@ class OrbitExtension(Orbit):
             dj *= disc.units['ro'] * disc.units['vo']
         return dj
 
-
-def integrate_single_orbit(orbit_init, disc, ro=8., vo=220., radec=True, lmc_orbit=None, lmc_potential=None):
+def integrate_single_orbit(orbit_init, disc, ro=8., vo=220., radec=True, lmc_orbit=None, lmc_potential=None,
+                           t_max=None):
 
     """
     This function integrates an orbit in a potential with initial conditions orbit_init over a time
@@ -133,11 +135,11 @@ def integrate_single_orbit(orbit_init, disc, ro=8., vo=220., radec=True, lmc_orb
         pot = disc.galactic_potential + lmc_pot
         satellite_orbit.integrate(disc.time_internal_eval, pot)
     satellite_orbit.turn_physical_off()
-    dr_min, t_min = orbit_closest_approach(disc, satellite_orbit)
+    dr_min, t_min = orbit_closest_approach(disc, satellite_orbit, t_max)
     satellite_orbit.set_closest_approach(dr_min, t_min)
     return satellite_orbit
 
-def orbit_closest_approach(disc, orb):
+def orbit_closest_approach(disc, orb, t_max=None):
     """
     Calculate the minimum distance between a halo and the solar neighborhood, and the time of minimum distance
     :param disc:
@@ -145,14 +147,25 @@ def orbit_closest_approach(disc, orb):
     :param units:
     :return:
     """
-    x_solar, y_solar = disc.solar_circle
+    _x_solar, _y_solar = disc.solar_circle
     orb.turn_physical_off()
-    x_orb, y_orb, z_orb = np.squeeze(orb.x(disc.time_internal_eval)), np.squeeze(orb.y(disc.time_internal_eval)), np.squeeze(
-        orb.z(disc.time_internal_eval))
+    if t_max is None:
+        t = disc.time_internal_eval
+        x_solar = _x_solar
+        y_solar = _y_solar
+    else:
+        assert t_max < 0
+        t_max_interal = disc.time_to_internal_time(t_max)
+        indexes = np.where(disc.time_internal_eval > t_max_interal)[0]
+        t = disc.time_internal_eval[indexes]
+        x_solar = _x_solar[indexes]
+        y_solar = _y_solar[indexes]
+    x_orb, y_orb, z_orb = np.squeeze(orb.x(t)), np.squeeze(orb.y(t)), np.squeeze(
+        orb.z(t))
     dx, dy, dz = x_orb - x_solar, y_orb - y_solar, z_orb - 0.0
     dr = np.sqrt(dx ** 2 + dy ** 2 + dz ** 2) * disc.units['ro']
     idx_min = np.argsort(dr)[0]
-    return dr[idx_min], abs(disc.internal_time_to_time(disc.time_internal_eval[idx_min]))
+    return dr[idx_min], abs(disc.internal_time_to_time(t[idx_min]))
 
 def sample_sag_orbit(scale_uncertainties=1.0):
     """
@@ -160,6 +173,9 @@ def sample_sag_orbit(scale_uncertainties=1.0):
     :param scale_uncertainties:
     :return:
     """
+    # orbit_init = [280. * apu.deg, -30. * apu.deg, 27. * apu.kpc,
+    #               -2.6 * apu.mas / apu.yr, -1.3 * apu.mas / apu.yr,
+    #               140. * apu.km / apu.s]  # Initial conditions of the satellite
     alpha_0, delta_0 = 283.8313, -30.5453
 
     standard_dev = np.sqrt(0.001)
@@ -324,9 +340,6 @@ def satellite_vertical_force(disc, satellite_orbit, satellite_potential,
     """
     x_solar, y_solar = disc.solar_circle
     t_eval_internal = disc.time_internal_eval
-    if t_max is not None:
-        index_break = np.where(t_eval_internal >= disc.time_to_internal_time(t_max))[0][0]
-        t_eval_internal = t_eval_internal[index_break:]
     satellite_orbit.turn_physical_off()
     dx = x_solar - satellite_orbit.x(t_eval_internal)
     dy = y_solar - satellite_orbit.y(t_eval_internal)
@@ -334,6 +347,15 @@ def satellite_vertical_force(disc, satellite_orbit, satellite_potential,
     dR = np.sqrt(dx ** 2. + dy ** 2.)
     turn_physical_off(satellite_potential)
     force = evaluatezforces(satellite_potential, R=dR, z=dz)
+    if t_max is not None:
+        assert t_max < 0
+        t_max_interal = disc.time_to_internal_time(t_max)
+        indexes_before_tmax = np.where(t_eval_internal < t_max_interal)
+        if isinstance(z_coord, float) or isinstance(z_coord, int):
+            force[indexes_before_tmax] = 0
+        else:
+            # we have an array of forces
+            force[:, :, indexes_before_tmax] = 0
     if record_force_array:
         satellite_orbit.set_force_array(force)
     return force

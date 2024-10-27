@@ -73,7 +73,8 @@ class SubstructureRealization(object):
 
     def add_dwarf_galaxies(self, tidal_mass_loss=0.0, add_orbit_uncertainties=True,
                            additional_orbits=None, additional_mpeak=None,
-                           include_dwarf_list='DEFAULT', log10_m_peak_dict={}, LMC_effect=False):
+                           include_dwarf_list='DEFAULT', log10_m_peak_dict={}, LMC_effect=False,
+                           t_max=None):
 
         if self._dwarf_galaxies_added is False:
             if include_dwarf_list == 'DEFAULT':
@@ -110,7 +111,8 @@ class SubstructureRealization(object):
                 orbit = integrate_single_orbit(orb_init,
                                                self._disc,
                                                lmc_orbit=lmc_orbit,
-                                               lmc_potential=lmc_pot)
+                                               lmc_potential=lmc_pot,
+                                               t_max=t_max)
                 impact_distance, impact_time = orbit.closest_approach, orbit.impact_time
                 orbit.set_closest_approach(impact_distance, impact_time)
                 orbits.append(orbit)
@@ -128,7 +130,7 @@ class SubstructureRealization(object):
                         orb_init = sample_dwarf_orbit_init(name, self._disc.units, add_orbit_uncertainties)
                     else:
                         orb_init = additional_orbits[name]
-                    orbit = integrate_single_orbit(orb_init, self._disc)
+                    orbit = integrate_single_orbit(orb_init, self._disc, t_max=t_max)
                     impact_distance, impact_time = orbit.closest_approach, orbit.impact_time
                     orbit.set_closest_approach(impact_distance, impact_time)
                     orbits.append(orbit)
@@ -144,7 +146,7 @@ class SubstructureRealization(object):
     @classmethod
     def withDistanceCut(cls, disc, r_min, num_halos_scale=1.0,
                         norm=1200.0, alpha=-1.9, m_high=10**8, m_low=10**6,
-                        num_halos=None, max_impact_time=1.8, verbose=False):
+                        num_halos=None, t_max=-1.2, verbose=False):
         """
 
         :param disc: an instance of the Disc class
@@ -157,7 +159,7 @@ class SubstructureRealization(object):
         :param m_high: the upper mass limit for subhalos
         :param m_low: the lower mass limit for subhalos
         :param num_halos: number of halos to generate, overrides calculation based on norm parameter
-        :param max_impact_time: discard subhalos with impact times greater than this
+        :param t_max: discard subhalos with impact times greater than this
         :return: an instance of Realization
         """
         _subhalo_masses = sample_mass_function(num_halos_scale * norm,
@@ -182,9 +184,9 @@ class SubstructureRealization(object):
                     phi * 180/np.pi * apu.deg]
             orb = integrate_single_orbit(vxvv, disc,
                                          radec=False,
-                                         )
+                                         t_max=t_max)
             impact_distance, impact_time = orbit_closest_approach(disc, orb)
-            if impact_distance <= r_min and abs(impact_time) <= max_impact_time:
+            if impact_distance <= r_min and abs(impact_time) <= abs(t_max):
                 orbits.append(orb)
                 c = sample_concentration_nfw(m)
                 potentials.append(NFWPotential(mvir=m / 10 ** 12, conc=c))

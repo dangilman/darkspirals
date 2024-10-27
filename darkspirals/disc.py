@@ -61,7 +61,8 @@ class Disc(object):
                 _ = self.action_angle_interp
             _ = self.orbits_in_phase_space
 
-    def compute_deltaJ_from_forces(self, forces, second_order=False, verbose=False, parallel=False, n_cpu=6):
+    def compute_deltaJ_from_forces(self, forces, second_order=False, verbose=False,
+                                   parallel=False, n_cpu=6):
         """
         Compute the change to the vertical action from an external force
         :param forces: a list of forces acting on the phase space, each force must have shape (n, n, len(time_eval_internal)
@@ -89,7 +90,8 @@ class Disc(object):
     def compute_satellite_forces(self, satellite_orbit_list=None,
                                  satellite_potentials_list=None,
                                  verbose=False,
-                                 parallel=False, n_cpu=6,
+                                 parallel=False,
+                                 n_cpu=6,
                                  t_max=None):
 
         """
