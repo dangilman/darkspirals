@@ -2,10 +2,9 @@ import numpy as np
 from scipy.stats.kde import gaussian_kde
 from darkspirals.substructure.galacticus_subhalo_data import galacticus_output, number_of_realizations
 from galpy.util.coords import rect_to_cyl, rect_to_cyl_vec
-from darkspirals.orbit_util import integrate_single_orbit, sample_dwarf_orbit_init
+from darkspirals.orbit_util import integrate_single_orbit, sample_dwarf_orbit_init, orbit_parameters
 from galpy.potential import NFWPotential
 from darkspirals.substructure.halo_util import sample_concentration_nfw, sample_mass_function
-from darkspirals.orbit_util import orbit_closest_approach
 import astropy.units as apu
 import matplotlib.pyplot as plt
 
@@ -113,7 +112,7 @@ class SubstructureRealization(object):
                                                lmc_orbit=lmc_orbit,
                                                lmc_potential=lmc_pot,
                                                t_max=t_max)
-                impact_distance, impact_time = orbit.closest_approach, orbit.impact_time
+                impact_distance, impact_time = orbit_parameters(self._disc, orbit, pot)
                 orbit.set_closest_approach(impact_distance, impact_time)
                 orbits.append(orbit)
                 dwarf_galaxy_masses.append(m)
@@ -185,12 +184,14 @@ class SubstructureRealization(object):
             orb = integrate_single_orbit(vxvv, disc,
                                          radec=False,
                                          t_max=t_max)
-            impact_distance, impact_time = orbit_closest_approach(disc, orb)
+            c = sample_concentration_nfw(m)
+            pot = NFWPotential(mvir=m / 10 ** 12, conc=c)
+            impact_distance, impact_time = orbit_parameters(disc, orb, pot)
             if impact_distance <= r_min and abs(impact_time) <= abs(t_max):
                 orbits.append(orb)
-                c = sample_concentration_nfw(m)
-                potentials.append(NFWPotential(mvir=m / 10 ** 12, conc=c))
+                potentials.append(pot)
                 subhalo_masses.append(m)
+                orb.set_closest_approach(impact_distance, impact_time)
             if verbose and counter%25==0:
                 percent_done = int(100*counter/len(_subhalo_masses))
                 print('completed '+str(percent_done)+'% of force calculations... ')

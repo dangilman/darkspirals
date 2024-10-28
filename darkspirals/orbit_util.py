@@ -13,6 +13,55 @@ class OrbitExtension(Orbit):
     """
     force_array_computed = False
 
+    def distance_from_solar_position(self, disc, t_max=None):
+        """
+
+        :param disc:
+        :param t_max:
+        :return:
+        """
+        _x_solar, _y_solar = disc.solar_circle
+        self.turn_physical_off()
+        if t_max is None:
+            t = disc.time_internal_eval
+            x_solar = _x_solar
+            y_solar = _y_solar
+        else:
+            assert t_max < 0
+            t_max_interal = disc.time_to_internal_time(t_max)
+            indexes = np.where(disc.time_internal_eval > t_max_interal)[0]
+            t = disc.time_internal_eval[indexes]
+            x_solar = _x_solar[indexes]
+            y_solar = _y_solar[indexes]
+        x_orb, y_orb, z_orb = np.squeeze(self.x(t)), np.squeeze(self.y(t)), np.squeeze(
+            self.z(t))
+        dx, dy, dz = x_orb - x_solar, y_orb - y_solar, z_orb - 0.0
+        dr = np.sqrt(dx ** 2 + dy ** 2 + dz ** 2) * disc.units['ro']
+        return dr
+
+    def vertical_distance_from_solar_position(self, disc, t_max=None):
+        """
+
+        :param disc:
+        :param t_max:
+        :return:
+        """
+        _x_solar, _y_solar = disc.solar_circle
+        self.turn_physical_off()
+        if t_max is None:
+            t = disc.time_internal_eval
+            x_solar = _x_solar
+            y_solar = _y_solar
+        else:
+            assert t_max < 0
+            t_max_interal = disc.time_to_internal_time(t_max)
+            indexes = np.where(disc.time_internal_eval > t_max_interal)[0]
+            t = disc.time_internal_eval[indexes]
+            x_solar = _x_solar[indexes]
+            y_solar = _y_solar[indexes]
+        z_orb = np.squeeze(self.z(t))
+        return z_orb
+
     def minimum_distance_galactic_center(self, time_gyr, ro=8.0, vo=220.0):
         """
         Compute the minimum distance from the galactic center
@@ -118,7 +167,9 @@ class OrbitExtension(Orbit):
             dj *= disc.units['ro'] * disc.units['vo']
         return dj
 
-def integrate_single_orbit(orbit_init, disc, ro=8., vo=220., radec=True, lmc_orbit=None, lmc_potential=None,
+def integrate_single_orbit(orbit_init,
+                           disc,
+                           ro=8., vo=220., radec=True, lmc_orbit=None, lmc_potential=None,
                            t_max=None):
 
     """
@@ -135,20 +186,19 @@ def integrate_single_orbit(orbit_init, disc, ro=8., vo=220., radec=True, lmc_orb
         pot = disc.galactic_potential + lmc_pot
         satellite_orbit.integrate(disc.time_internal_eval, pot)
     satellite_orbit.turn_physical_off()
-    dr_min, t_min = orbit_closest_approach(disc, satellite_orbit, t_max)
-    satellite_orbit.set_closest_approach(dr_min, t_min)
     return satellite_orbit
 
-def orbit_closest_approach(disc, orb, t_max=None):
+def orbit_parameters(disc, orbit, potential, t_max=None):
     """
-    Calculate the minimum distance between a halo and the solar neighborhood, and the time of minimum distance
-    :param disc:
-    :param orb:
-    :param units:
+    Calculate the distance from the solar nieghborhood and the time when a satellite exerts the largest force on the
+    solar neighborhood
+    :param disc: an instance of Disc
+    :param orbit: an instance of OribtExtension
+    :param potential: potential of the satellite
     :return:
     """
     _x_solar, _y_solar = disc.solar_circle
-    orb.turn_physical_off()
+    orbit.turn_physical_off()
     if t_max is None:
         t = disc.time_internal_eval
         x_solar = _x_solar
@@ -160,12 +210,15 @@ def orbit_closest_approach(disc, orb, t_max=None):
         t = disc.time_internal_eval[indexes]
         x_solar = _x_solar[indexes]
         y_solar = _y_solar[indexes]
-    x_orb, y_orb, z_orb = np.squeeze(orb.x(t)), np.squeeze(orb.y(t)), np.squeeze(
-        orb.z(t))
+    x_orb, y_orb, z_orb = np.squeeze(orbit.x(t)), np.squeeze(orbit.y(t)), np.squeeze(
+        orbit.z(t))
     dx, dy, dz = x_orb - x_solar, y_orb - y_solar, z_orb - 0.0
-    dr = np.sqrt(dx ** 2 + dy ** 2 + dz ** 2) * disc.units['ro']
-    idx_min = np.argsort(dr)[0]
-    return dr[idx_min], abs(disc.internal_time_to_time(t[idx_min]))
+    dR = np.sqrt(dx ** 2. + dy ** 2.)
+    dr3d = np.sqrt(dx ** 2 + dy ** 2 + dz ** 2)
+    turn_physical_off(potential)
+    f = evaluatezforces(potential, R=dR, z=dz)
+    idx_max = np.argsort(np.absolute(f))[-1]
+    return dr3d[idx_max], abs(disc.internal_time_to_time(t[idx_max]))
 
 def sample_sag_orbit(scale_uncertainties=1.0):
     """
