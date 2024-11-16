@@ -15,6 +15,7 @@ def compute_df_from_orbits(disc_model,
                            diffusion_timescale=0.6,
                            overwrite_impact_times=None,
                            parallelize_diffusion_calculation=False,
+                           t_max=None,
                            verbose=False
                            ):
     """
@@ -36,11 +37,14 @@ def compute_df_from_orbits(disc_model,
     :param diffusion_timescale: a characteristic timescale for the diffusion model; default is 0.6 Gyr
     :param overwrite_impact_times: a list of impact times that replaces the impact times calculated from the actual orbits
     :param parallelize_diffusion_calculation: bool, if True the the diffusion model will be split across multiple CPUs
+    :param t_max: set perturbing vertical force = 0 for times in the past > t_max
     :return: distribution function, and the series of individual changes to the action (internal units)
     """
     if verbose:
         print('cacluating satellite forces... ')
-    force_list, impact_times, _ = disc_model.compute_satellite_forces(satellite_orbit_list, satellite_potential_list)
+    force_list, impact_times, _ = disc_model.compute_satellite_forces(satellite_orbit_list,
+                                                                      satellite_potential_list,
+                                                                      t_max=t_max)
     if verbose:
         print('done.')
     if overwrite_impact_times is not None:
@@ -78,7 +82,7 @@ def compute_df_from_orbits(disc_model,
     for dJ in deltaJ_list:
         deltaJ_net += dJ
     df = compute_df_from_actions(disc_model, velocity_dispersion, deltaJ_net, df_model,
-                                   alpha, solve_Ez, fit_midplane)
+                                     alpha, solve_Ez, fit_midplane)
     return df, deltaJ_list
 
 def compute_df_from_actions(disc_model,
@@ -106,6 +110,7 @@ def compute_df_from_actions(disc_model,
             deltaJ += dji
     else:
         deltaJ = deltaJ_net
+
     if df_model == 'LI&WIDROW':
         dF = DistributionFunctionLiandWidrow2021(velocity_dispersion / disc_model.units['vo'],
                                                  disc_model.vertical_frequency,

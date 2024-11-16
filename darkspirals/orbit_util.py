@@ -13,31 +13,94 @@ class OrbitExtension(Orbit):
     """
     force_array_computed = False
 
-    def distance_from_solar_position(self, disc, t_max=None):
+    def __init__(self, vxvv=None,
+        ro=None,
+        vo=None,
+        zo=None,
+        solarmotion=None,
+        radec=False,
+        uvw=False,
+        lb=False,
+        pot=None):
         """
+        This class implements an Orbit class in galpy, but the potential of the satellite associated with the orbit
+        is also made into a class attribute in order to calculate various aspects of the perturbation associated with
+        the satellite
 
-        :param disc:
-        :param t_max:
-        :return:
+        See the dcoumentation in galpy for the initialization of orbits
+        :param pot: an instance of potential in galpy for the satellite
         """
-        _x_solar, _y_solar = disc.solar_circle
-        self.turn_physical_off()
-        if t_max is None:
-            t = disc.time_internal_eval
-            x_solar = _x_solar
-            y_solar = _y_solar
+        self.potential = pot
+        turn_physical_off(self.potential)
+        super(OrbitExtension, self).__init__(vxvv, ro, vo, zo, solarmotion, radec, uvw, lb)
+
+    def trajectory(self, disc, relative=False):
+        """
+        Calculate the 6D phase space of the orbit as a function of time
+        :param disc: an instance of Disc
+        :param relative: bool; calculate motion relative to the position and velocity of the sun
+        :return: position and velocity in internal units
+        """
+        t = disc.time_internal_eval
+        x = self.x(t) * disc.units['ro']
+        y = self.y(t) * disc.units['ro']
+        z = self.z(t) * disc.units['ro']
+        vx = self.vx(t) * disc.units['vo']
+        vy = self.vy(t) * disc.units['vo']
+        vz = self.vz(t) * disc.units['vo']
+        if relative:
+            xref, yref = disc.solar_circle
+            vxref, vyref = disc.solar_circle_velocity(t)
+            zref, vzref = 0.0, 0.0
         else:
-            assert t_max < 0
-            t_max_interal = disc.time_to_internal_time(t_max)
-            indexes = np.where(disc.time_internal_eval > t_max_interal)[0]
-            t = disc.time_internal_eval[indexes]
-            x_solar = _x_solar[indexes]
-            y_solar = _y_solar[indexes]
-        x_orb, y_orb, z_orb = np.squeeze(self.x(t)), np.squeeze(self.y(t)), np.squeeze(
-            self.z(t))
-        dx, dy, dz = x_orb - x_solar, y_orb - y_solar, z_orb - 0.0
-        dr = np.sqrt(dx ** 2 + dy ** 2 + dz ** 2) * disc.units['ro']
-        return dr
+            xref, yref = 0.0, 0.0
+            vxref, vyref = 0.0, 0.0
+            zref, vzref = 0.0, 0.0
+        xref *= disc.units['ro']
+        yref *= disc.units['ro']
+        zref *= disc.units['ro']
+        vxref *= disc.units['vo']
+        vyref *= disc.units['vo']
+        vzref *= disc.units['vo']
+        x = (x - xref, y - yref, z - zref)
+        v = (vx - vxref, vy - vyref, vz - vzref)
+        return x, v
+
+    def orbit_parameters(self, disc, t_max=None):
+        """
+        Calculate the distance from the solar neighborhood at the time when a satellite exerts the largest force on the
+        solar neighborhood. Return both
+        :param disc: an instance of Disc
+        :param t_max: ignore properties of the orbit before t_max; t_max should be negative, i.e. a time in the past
+        :return: distance in 3D from the solar position when the perturbed exerted the strongest vertical force, and
+        the (absolute value of the) time when this maximum force occured in kpc and Gyr, resp.
+        """
+        r_min, t_min = self.closest_approach, self.impact_time
+        if r_min is None or t_min is None:
+            _x_solar, _y_solar = disc.solar_circle
+            self.turn_physical_off()
+            if t_max is None:
+                t = disc.time_internal_eval
+                x_solar = _x_solar
+                y_solar = _y_solar
+            else:
+                assert t_max < 0
+                t_max_interal = disc.time_to_internal_time(t_max)
+                indexes = np.where(disc.time_internal_eval >= t_max_interal)[0]
+                t = disc.time_internal_eval[indexes]
+                x_solar = _x_solar[indexes]
+                y_solar = _y_solar[indexes]
+            x_orb, y_orb, z_orb = np.squeeze(self.x(t)), np.squeeze(self.y(t)), np.squeeze(
+                self.z(t))
+            dx, dy, dz = x_orb - x_solar, y_orb - y_solar, z_orb - 0.0
+            dR = np.sqrt(dx ** 2. + dy ** 2.)
+            dr3d = np.sqrt(dx ** 2 + dy ** 2 + dz ** 2)
+            f = evaluatezforces(self.potential, R=dR, z=dz)
+            idx_max = np.argmax(np.absolute(f))
+            r_min = dr3d[idx_max] * disc.units['ro']
+            t_min = abs(disc.internal_time_to_time(t[idx_max]))
+            self.set_closest_approach(r_min, t_min)
+        return r_min, t_min
 
     def vertical_distance_from_solar_position(self, disc, t_max=None):
         """
@@ -50,15 +113,11 @@ class OrbitExtension(Orbit):
         self.turn_physical_off()
         if t_max is None:
             t = disc.time_internal_eval
-            x_solar = _x_solar
-            y_solar = _y_solar
         else:
             assert t_max < 0
             t_max_interal = disc.time_to_internal_time(t_max)
-            indexes = np.where(disc.time_internal_eval > t_max_interal)[0]
+            indexes = np.where(disc.time_internal_eval >= t_max_interal)[0]
             t = disc.time_internal_eval[indexes]
-            x_solar = _x_solar[indexes]
-            y_solar = _y_solar[indexes]
         z_orb = np.squeeze(self.z(t))
         return z_orb
 
@@ -110,32 +169,39 @@ class OrbitExtension(Orbit):
         else:
             return None
 
-    def impact_velocity(self, ro=8.0, vo=220.0):
+    def impact_velocity(self, disc, relative=False):
         """
-        Compute the velocity at the minimum separation from the solar position
-        :param ro:
-        :param vo:
-        :return:
+        The speed of a satellite relative to the sun at the impact time
+        :param disc: instance of Disc class
+        :return: speed in km/sec
         """
+        ro, vo = disc.units['ro'], disc.units['vo']
         t_min = self.impact_time
         if t_min is None:
             raise Exception('must integrate orbits before computing impact velocity')
         t_min_internal = t_min / time_in_Gyr(vo, ro)
-        v = np.sqrt(self.vx(-t_min_internal) ** 2 + self.vy(-t_min_internal) ** 2  + self.vz(-t_min_internal)**2)
+        if relative:
+            vx_ref, vy_ref = disc.solar_circle_velocity(-t_min_internal)
+        else:
+            vx_ref = 0.0
+            vy_ref = 0.0
+        vx_orb = self.vx(-t_min_internal)
+        vy_orb = self.vy(-t_min_internal)
+        vz_orb = self.vz(-t_min_internal)
+        v = np.sqrt((vx_orb - vx_ref) ** 2 + (vy_orb - vy_ref) ** 2 + vz_orb**2)
         return v * vo
 
-    def force_exerted(self, disc, satellite_potential, physical_units=False, t_max=None):
+    def force_exerted(self, disc, physical_units=False, t_max=None):
         """
 
         :param disc: an instance of Disc
-        :param satellite_potential: a potential instance in galpy for the satellite
         :param physical_units: bool; give output in physical units rather than internal galpy units
         :param t_max: force is set to zero for t < t_max (t_max is < 0)
         :return: the force exerted by the satellite as a function of time at the solar position
         """
         f = satellite_vertical_force(disc,
                                      self,
-                                     satellite_potential)
+                                     self.potential)
         if physical_units:
             f *= force_in_2piGmsolpc2(**disc.units)
         if t_max is None:
@@ -150,34 +216,31 @@ class OrbitExtension(Orbit):
             f[indexes] = 0.0
             return f
 
-    def deltaJ(self, disc, satellite_potential, physical_units=False, t_max=None):
+    def deltaJ(self, disc, physical_units=False, t_max=None):
         """
         Compute the perturbation to the action at the solar position
         :param disc:
-        :param satellite_potential:
         :param physical_units:
         :param t_max: force is set to zero for t < t_max (t_max is < 0)
         :return:
         """
         f, _, _ = disc.compute_satellite_forces(satellite_orbit_list=[self],
-                                          satellite_potentials_list=[satellite_potential],
+                                          satellite_potentials_list=[self.potential],
                                           t_max=t_max)
         dj = disc.compute_deltaJ_from_forces(f)[0]
         if physical_units:
             dj *= disc.units['ro'] * disc.units['vo']
         return dj
 
-def integrate_single_orbit(orbit_init,
-                           disc,
-                           ro=8., vo=220., radec=True, lmc_orbit=None, lmc_potential=None,
-                           t_max=None):
+def integrate_single_orbit(orbit_init, disc, pot,
+                           ro=8., vo=220., radec=True, lmc_orbit=None, lmc_potential=None):
 
     """
     This function integrates an orbit in a potential with initial conditions orbit_init over a time
     time_Gyr
 
     """
-    satellite_orbit = OrbitExtension(vxvv=orbit_init, radec=radec, ro=ro, vo=vo)
+    satellite_orbit = OrbitExtension(vxvv=orbit_init, radec=radec, ro=ro, vo=vo, pot=pot)
     if lmc_orbit is None:
         satellite_orbit.integrate(disc.time_internal_eval, disc.galactic_potential)  # Integrate orbit
     else:
@@ -187,38 +250,6 @@ def integrate_single_orbit(orbit_init,
         satellite_orbit.integrate(disc.time_internal_eval, pot)
     satellite_orbit.turn_physical_off()
     return satellite_orbit
-
-def orbit_parameters(disc, orbit, potential, t_max=None):
-    """
-    Calculate the distance from the solar nieghborhood and the time when a satellite exerts the largest force on the
-    solar neighborhood
-    :param disc: an instance of Disc
-    :param orbit: an instance of OribtExtension
-    :param potential: potential of the satellite
-    :return:
-    """
-    _x_solar, _y_solar = disc.solar_circle
-    orbit.turn_physical_off()
-    if t_max is None:
-        t = disc.time_internal_eval
-        x_solar = _x_solar
-        y_solar = _y_solar
-    else:
-        assert t_max < 0
-        t_max_interal = disc.time_to_internal_time(t_max)
-        indexes = np.where(disc.time_internal_eval > t_max_interal)[0]
-        t = disc.time_internal_eval[indexes]
-        x_solar = _x_solar[indexes]
-        y_solar = _y_solar[indexes]
-    x_orb, y_orb, z_orb = np.squeeze(orbit.x(t)), np.squeeze(orbit.y(t)), np.squeeze(
-        orbit.z(t))
-    dx, dy, dz = x_orb - x_solar, y_orb - y_solar, z_orb - 0.0
-    dR = np.sqrt(dx ** 2. + dy ** 2.)
-    dr3d = np.sqrt(dx ** 2 + dy ** 2 + dz ** 2)
-    turn_physical_off(potential)
-    f = evaluatezforces(potential, R=dR, z=dz)
-    idx_max = np.argsort(np.absolute(f))[-1]
-    return dr3d[idx_max], abs(disc.internal_time_to_time(t[idx_max]))
 
 def sample_sag_orbit(scale_uncertainties=1.0):
     """
@@ -253,130 +284,10 @@ def sample_sag_orbit(scale_uncertainties=1.0):
 
     #[283. * apu.deg, -30. * apu.deg, 26. * apu.kpc,
     # -2.6 * apu.mas / apu.yr, -1.3 * apu.mas / apu.yr, 140. * apu.km / apu.s]
-    orbit_init_sag = [alpha * apu.deg, delta * apu.deg, z * apu.kpc,
-                      mu_alpha * apu.mas / apu.yr, mu_delta * apu.mas / apu.yr,
-                      vr * apu.km / apu.s]  # Initial conditions of the satellite
-
+    orbit_init_sag = [alpha , delta, z,
+                      mu_alpha, mu_delta,
+                      vr ]  # Initial conditions of the satellite
     return orbit_init_sag, uncertainties
-
-def sample_dwarf_orbit_init(name, units, add_uncertainties=True):
-    # uncertainities from Fritz et al.
-    # https://ui.adsabs.harvard.edu/abs/2018A%26A...619A.103F/abstract
-    # and Pace et al.
-    # https://ui.adsabs.harvard.edu/abs/2022ApJ...940..136P/abstract
-    _unit = {'ra': apu.deg,
-             'dec': apu.deg,
-             'dist': apu.kpc,
-             'pmra': apu.mas / apu.yr,
-             'pmdec': apu.mas / apu.yr,
-             'vlos': apu.km / apu.s}
-    if name == 'SegueI':
-        orb = [Orbit.from_name('Segue1')]
-    elif name == 'SegueII':
-        orb = [Orbit.from_name('Segue2')]
-    elif name == 'WillmanI':
-        orb = [Orbit.from_name('Willman1')]
-    else:
-        orb = [Orbit.from_name(name)]
-    init = {'ra': orb[0].ra(**units) * apu.deg,
-            'dec': orb[0].dec(**units) * apu.deg,
-            'dist': orb[0].dist(**units) * apu.kpc,
-            'pmra': orb[0].pmra(**units) * apu.mas / apu.yr,
-            'pmdec': orb[0].pmdec(**units) * apu.mas / apu.yr,
-            'vlos': orb[0].vlos(**units) * apu.km / apu.s}
-    if add_uncertainties:
-        uncertainty = sample_dwarf_orbit_uncertainty(name)
-    else:
-        uncertainty = None
-    neworb_init = []
-    for orb_param in init.keys():
-        if add_uncertainties:
-            neworb_init.append(np.random.normal(init[orb_param].value, uncertainty[orb_param]) * _unit[orb_param])
-        else:
-            neworb_init.append(init[orb_param].value)
-    return neworb_init
-
-def sample_dwarf_orbit_uncertainty(name):
-    if name == 'Willman1':
-        uncertainty = {'ra': 0.001,
-                       'dec': 0.001,
-                       'dist': 0.001,
-                       'pmra': 0.087,
-                       'pmdec': 0.095,
-                       'vlos': 2.5}
-    elif name == 'Segue1':
-        uncertainty = {'ra': 0.001,
-                       'dec': 0.001,
-                       'dist': 0.001,
-                       'pmra': 0.051,
-                       'pmdec': 0.046,
-                       'vlos': 0.9}
-    elif name == 'Segue2':
-        uncertainty = {'ra': 0.001,
-                       'dec': 0.001,
-                       'dist': 0.001,
-                       'pmra': 0.059,
-                       'pmdec': 0.05,
-                       'vlos': 2.5}
-    elif name == 'Hercules':
-        uncertainty = {'ra': 0.001,
-                       'dec': 0.001,
-                       'dist': 0.001,
-                       'pmra': 0.042,
-                       'pmdec': 0.036,
-                       'vlos': 1.1}
-    elif name == 'LeoI':
-        uncertainty = {'ra': 0.001,
-                       'dec': 0.001,
-                       'dist': 0.001,
-                       'pmra': 0.014,
-                       'pmdec': 0.01,
-                       'vlos': 0.5}
-    elif name == 'LeoII':
-        uncertainty = {'ra': 0.001,
-                       'dec': 0.001,
-                       'dist': 0.001,
-                       'pmra': 0.028,
-                       'pmdec': 0.026,
-                       'vlos': 0.1}
-    elif name == 'Draco':
-        uncertainty = {'ra': 0.001,
-                       'dec': 0.001,
-                       'dist': 0.001,
-                       'pmra': 0.006,
-                       'pmdec': 0.006,
-                       'vlos': 0.1}
-    elif name == 'UrsaMinor':
-        uncertainty = {'ra': 0.001,
-                       'dec': 0.001,
-                       'dist': 0.001,
-                       'pmra': 0.021,
-                       'pmdec': 0.025,
-                       'vlos': 1.4}
-    elif name == 'Sculptor':
-        uncertainty = {'ra': 0.001,
-                       'dec': 0.001,
-                       'dist': 0.001,
-                       'pmra': 0.002,
-                       'pmdec': 0.002,
-                       'vlos': 0.1}
-    elif name == 'LMC':
-        uncertainty = {'ra': 0.001,
-                       'dec': 0.001,
-                       'dist': 0.001,
-                       'pmra': 0.02,
-                       'pmdec': 0.047,
-                       'vlos': 24.0}
-    else:
-        print('adding default orbit uncertainties for '+str(name))
-        uncertainty = {'ra': 0.001,
-                       'dec': 0.001,
-                       'dist': 0.001,
-                       'pmra': 0.002,
-                       'pmdec': 0.002,
-                       'vlos': 0.1}
-
-    return uncertainty
 
 def satellite_vertical_force(disc, satellite_orbit, satellite_potential,
                              z_coord=0.0, record_force_array=False, t_max=None):

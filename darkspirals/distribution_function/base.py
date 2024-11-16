@@ -9,8 +9,8 @@ class DistributionFunctionBase(object):
     def __init__(self, z_coords, vz_coords, units, fit_midplane):
         """
 
-        :param z_coords: the z-coordinates of phase space in internal units
-        :param vz_coords: the vz-coordinates of phase space in internal units
+        :param z_coords: z coordintes in physical units
+        :param vz_coords: vz coordinates in physical units
         :param units: the internal units used by galpy
         :param fit_midplane: bool; compute the z-coordinate of the midplane
         """
@@ -26,8 +26,63 @@ class DistributionFunctionBase(object):
         else:
             self._z_midplane = 0.0
         df = self.function
+        # interp done for physical units
         self.interp_df = RegularGridInterpolator(points_interp, df)
         self.interp_df_normalized = RegularGridInterpolator(points_interp, df / np.max(df))
+
+    def sample(self, N_samples=1000):
+        """
+        Draw samples of (z, v_z) from the distribution function with rejection sampling
+        :return: (z, v_z) in physical units
+        """
+        z = []
+        vz = []
+        while True:
+            _z = np.random.uniform(min(self._z), max(self._z)) * self._units['ro']
+            _vz = np.random.uniform(min(self._v), max(self._v)) * self._units['vo']
+            p = float(self.interp_df_normalized((_z, _vz)))
+            u = np.random.rand()
+            if p > u:
+                z.append(_z)
+                vz.append(_vz)
+            if len(z) == N_samples:
+                break
+        return np.array(z), np.array(vz)
+
+    def sample_action_angle_freq(self, disc, N_samples=10000, physical_output=False, z_max=None, vz_max=None):
+        """
+        Sample (J(z, vz), theta(z, vz)) weighted by df(z, vz)
+        :return:
+        """
+        N_samples = int(N_samples)
+        zmin_max = float(np.max(np.absolute(self._z * self._units['ro'])))
+        if z_max is not None:
+            zmin_max = min(z_max, zmin_max)
+        vmin_max = float(np.max(np.absolute(self._v * self._units['vo'])))
+        if vz_max is not None:
+            vmin_max = min(vmin_max, vz_max)
+        samples_z_phys = np.random.uniform(-zmin_max, zmin_max, N_samples)
+        samples_vz_phys = np.random.uniform(-vmin_max, vmin_max, N_samples)
+        J = []
+        weights = []
+        theta = []
+        frequencies = []
+        for (zi, vzi) in zip(samples_z_phys.ravel(), samples_vz_phys.ravel()):
+            j, angle, freq = disc.action_angle_interp((zi, vzi))
+            w = float(self.interp_df_normalized((zi,vzi)))
+            J.append(j)
+            theta.append(angle)
+            weights.append(w)
+            frequencies.append(freq)
+        if physical_output:
+            jphys = self._units['ro'] * self._units['vo']
+            freq_phys = self._units['vo'] / self._units['ro']
+            return np.array(J) * jphys, \
+                   np.array(theta), \
+                   np.array(frequencies) * freq_phys, \
+                   np.array(weights)
+        else:
+            return np.array(J), np.array(theta), np.array(frequencies), np.array(weights)
 
     def update_params(self, *args, **kwargs):
         """
@@ -61,7 +116,6 @@ class DistributionFunctionBase(object):
             hist_range = (freq_range, angle_range)
             _h, angle_vals, freq_vals = np.histogram2d(freq, angle, weights=weights, range=hist_range, bins=nbins)
             h += _h
-
         return h/n_blocks, angle_range, freq_range
 
     def frequency_angle_representation(self, disc, N_samples=10**7):

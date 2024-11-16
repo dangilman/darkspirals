@@ -129,7 +129,7 @@ class DiffusionConvolutionSpatiallyVarying(DiffusionBase):
         :return:
         """
         if diffusion_coefficients is None:
-            diffusion_coefficients = (0.125, 1.9)
+            diffusion_coefficients = (0.28, 1.15)
 
         tau = abs(impact_time_gyr) / diffusion_timescale
         prefactor = diffusion_coefficients[0] * tau ** diffusion_coefficients[1]
@@ -150,7 +150,6 @@ class DiffusionConvolutionSpatiallyVarying(DiffusionBase):
         z_step = z_coords[1] - z_coords[0]
         vz_step = vz_coords[1] - vz_coords[0]
         dJ = np.ones_like(deltaJ).ravel()
-        r = np.zeros_like(self._disc_model.action)
         (N, N) = self._disc_model.action.shape
         for z_i in z_coords:
             for vz_i in vz_coords:

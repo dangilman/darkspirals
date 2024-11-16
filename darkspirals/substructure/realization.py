@@ -1,12 +1,13 @@
 import numpy as np
 from scipy.stats.kde import gaussian_kde
-from darkspirals.substructure.galacticus_subhalo_data import galacticus_output, number_of_realizations
+from darkspirals.substructure.galacticus_subhalo_data import galacticus_output
 from galpy.util.coords import rect_to_cyl, rect_to_cyl_vec
-from darkspirals.orbit_util import integrate_single_orbit, sample_dwarf_orbit_init, orbit_parameters
+from darkspirals.orbit_util import integrate_single_orbit
 from galpy.potential import NFWPotential
 from darkspirals.substructure.halo_util import sample_concentration_nfw, sample_mass_function
 import astropy.units as apu
 import matplotlib.pyplot as plt
+from darkspirals.substructure.dphr import PopulationdSphr
 
 class SubstructureRealization(object):
 
@@ -21,6 +22,7 @@ class SubstructureRealization(object):
         self._subhalo_masses = subhalo_masses
         self._dwarf_galaxy_masses = []
         self._dwarf_galaxies_added = False
+        self.pop_dsphr = None
 
     @classmethod
     def join(cls, realization1, realization2):
@@ -70,76 +72,60 @@ class SubstructureRealization(object):
     def dwarf_galaxy_potentials(self):
         return self._dwarf_galaxy_potentials
 
-    def add_dwarf_galaxies(self, tidal_mass_loss=0.0, add_orbit_uncertainties=True,
-                           additional_orbits=None, additional_mpeak=None,
-                           include_dwarf_list='DEFAULT', log10_m_peak_dict={}, LMC_effect=False,
+    def add_dwarf_galaxies(self, add_orbit_uncertainties=True,
+                           additional_orbits=None, additional_mpeak=None, LMC_effect=False,
                            t_max=None):
+        """
 
-        if self._dwarf_galaxies_added is False:
-            if include_dwarf_list == 'DEFAULT':
-                include_dwarf_list = ['Sculptor', 'LeoI', 'LeoII', 'Fornax', 'UrsaMinor', 'UrsaMajorII', 'Draco',
-                                          'Willman1', 'BootesI',
-                                          'SegueI', 'SegueII', 'Hercules', 'TucanaIII']
-                log10_m_peak_dict = {'Willman1': 7.711677918523403, 'SegueI': 7.489376352511657, 'SegueII': 7.5905868215901755,
-                                   'Hercules': 8.308096754164671, 'LeoI': 9.383457988123926, 'LeoII': 9.014762707909323,
-                                   'Draco': 8.82860773799705, 'BootesI': 8.342436020459168, 'UrsaMinor': 8.886442291756202,
-                                   'UrsaMajorII': 8.022538644978852, 'Sculptor': 9.209954326846466, 'Fornax': 9.687089395359479,
-                                     'TucanaIII': 7.7}
-            else:
-                assert len(include_dwarf_list) == len(log10_m_peak_dict.keys())
+        :param tidal_mass_loss:
+        :param add_orbit_uncertainties:
+        :param additional_orbits:
+        :param additional_mpeak:
+        :param LMC_effect:
+        :param t_max:
+        :return:
+        """
 
-            dwarf_potentials = []
-            orbits = []
-            dwarf_galaxy_masses = []
-            if LMC_effect:
-                LMC_mass = 1.38 * 10 ** 11
-                c = sample_concentration_nfw(LMC_mass)
-                lmc_pot = NFWPotential(mvir=LMC_mass / 10 ** 12, conc=c)
-                lmc_orbit = sample_dwarf_orbit_init('LMC', self._disc.units, False)
-                lmc_orbit.integrate(self._disc.time_internal_eval, self._disc.galactic_potential)
-                lmc_orbit.turn_physical_off()
-            else:
-                lmc_orbit = None
-                lmc_pot = None
-            for name in include_dwarf_list:
-                m = 10**(log10_m_peak_dict[name] + tidal_mass_loss)
-                c = sample_concentration_nfw(m)
-                pot = NFWPotential(mvir=m / 10 ** 12, conc=c)
-                dwarf_potentials.append(pot)
-                orb_init = sample_dwarf_orbit_init(name, self._disc.units, add_orbit_uncertainties)
-                orbit = integrate_single_orbit(orb_init,
-                                               self._disc,
-                                               lmc_orbit=lmc_orbit,
-                                               lmc_potential=lmc_pot,
-                                               t_max=t_max)
-                impact_distance, impact_time = orbit_parameters(self._disc, orbit, pot)
-                orbit.set_closest_approach(impact_distance, impact_time)
-                orbits.append(orbit)
-                dwarf_galaxy_masses.append(m)
+        pop_dsphr = PopulationdSphr()
+        self.pop_dsphr = pop_dsphr
+        dwarf_potentials = []
+        dwarf_orbits = []
+        dwarf_galaxy_masses = []
+        dwarf_galaxy_names = []
 
-            if additional_orbits is not None:
-                for name in additional_orbits:
-                    include_dwarf_list.append(name)
-                    log10_m_peak_dict[name] = additional_mpeak[name]
-                    m = 10 ** (log10_m_peak_dict[name] + tidal_mass_loss)
-                    c = sample_concentration_nfw(m)
-                    pot = NFWPotential(mvir=m / 10 ** 12, conc=c)
-                    dwarf_potentials.append(pot)
-                    if additional_orbits[name] is None:
-                        orb_init = sample_dwarf_orbit_init(name, self._disc.units, add_orbit_uncertainties)
-                    else:
-                        orb_init = additional_orbits[name]
-                    orbit = integrate_single_orbit(orb_init, self._disc, t_max=t_max)
-                    impact_distance, impact_time = orbit.closest_approach, orbit.impact_time
-                    orbit.set_closest_approach(impact_distance, impact_time)
-                    orbits.append(orbit)
-                    dwarf_galaxy_masses.append(m)
+        for name in pop_dsphr.dwarf_galaxy_names:
 
-            self._dwarf_galaxy_orbits = orbits
-            self._dwarf_galaxy_names = include_dwarf_list
-            self._dwarf_galaxy_potentials = dwarf_potentials
-            self._dwarf_galaxy_masses = dwarf_galaxy_masses
-            self._dwarf_galaxies_added = True
+            m_peak = 10 ** pop_dsphr.log10_mpeak_from_name(name)
+            potential = pop_dsphr.dsphr_potential_from_name(name)
+            dwarf_potentials.append(potential)
+            orbit_init = pop_dsphr.orbit_init_from_name(name, uncertainties=add_orbit_uncertainties)
+            orbit = integrate_single_orbit(orbit_init,
+                                           self._disc,
+                                           pot=potential,
+                                           radec=True)
+            _, _ = orbit.orbit_parameters(self._disc, t_max)
+            dwarf_orbits.append(orbit)
+            dwarf_galaxy_masses.append(m_peak)
+            dwarf_galaxy_names.append(name)
+
+        if additional_orbits is not None:
+            for name in additional_orbits:
+                m_peak = 10 ** additional_mpeak[name]
+                c = sample_concentration_nfw(m_peak)
+                potential = NFWPotential(mvir=m_peak / 10 ** 12, conc=c)
+                dwarf_potentials.append(potential)
+                orb_init = additional_orbits[name]
+                orbit = integrate_single_orbit(orb_init, self._disc, pot=potential, radec=True)
+                _, _ = orbit.orbit_parameters(self._disc, t_max)
+                dwarf_orbits.append(orbit)
+                dwarf_galaxy_masses.append(m_peak)
+                dwarf_galaxy_names.append(name)
+
+        self._dwarf_galaxy_orbits = dwarf_orbits
+        self._dwarf_galaxy_names = dwarf_galaxy_names
+        self._dwarf_galaxy_potentials = dwarf_potentials
+        self._dwarf_galaxy_masses = dwarf_galaxy_masses
+        self._dwarf_galaxies_added = True
         return
 
     @classmethod
@@ -181,12 +167,13 @@ class SubstructureRealization(object):
                     z_i * apu.kpc,
                     vz_i * apu.km/apu.s,
                     phi * 180/np.pi * apu.deg]
-            orb = integrate_single_orbit(vxvv, disc,
-                                         radec=False,
-                                         t_max=t_max)
             c = sample_concentration_nfw(m)
             pot = NFWPotential(mvir=m / 10 ** 12, conc=c)
-            impact_distance, impact_time = orbit_parameters(disc, orb, pot)
+            orb = integrate_single_orbit(vxvv,
+                                         disc,
+                                         pot=pot,
+                                         radec=False)
+            impact_distance, impact_time = orb.orbit_parameters(disc, t_max)
             if impact_distance <= r_min and abs(impact_time) <= abs(t_max):
                 orbits.append(orb)
                 potentials.append(pot)

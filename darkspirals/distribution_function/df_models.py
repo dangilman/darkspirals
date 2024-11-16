@@ -11,8 +11,8 @@ class DistributionFunctionIsothermal(DistributionFunctionBase):
         :param velocity_dispersion:
         :param vertical_frequency:
         :param action:
-        :param z_coords:
-        :param vz_coords:
+        :param z_coords: z coordintes in physical units
+        :param vz_coords: vz coordinates in physical units
         :param units:
         :param fit_midplane:
         """
@@ -57,8 +57,8 @@ class DistributionFunctionLiandWidrow2021(DistributionFunctionBase):
         :param vertical_frequency:
         :param alpha:
         :param action:
-        :param z_coords:
-        :param vz_coords:
+        :param z_coords: z coordintes in physical units
+        :param vz_coords: vz coordinates in physical units
         :param units:
         :param fit_midplane:
         :param solve_Ez:
