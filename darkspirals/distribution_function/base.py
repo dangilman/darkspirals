@@ -92,7 +92,7 @@ class DistributionFunctionBase(object):
         """
         raise Exception('update params not defined for this class')
 
-    def frequency_angle_representation_grid(self, disc, N_samples=10**7, nbins=50):
+    def frequency_angle_representation_grid(self, disc, N_samples=10**8, nbins=50):
         """
         Derives the distribution function in frequency-angle coordinates on a grid
         This is essentially the same calculation as in frequency_angle_representation, however, this allows for much
@@ -103,17 +103,18 @@ class DistributionFunctionBase(object):
         :return: frequency coordinates, angle coordinates, and importance weights
         """
         N_samples = int(N_samples)
-        blocks = int(2e7)
+        blocks = int(1e8)
         n_blocks = int(N_samples / blocks)
         h = 0
         for i in range(0, n_blocks):
             freq, angle, weights = self.frequency_angle_representation(disc, blocks)
-            phys_gyr = 28.05
-            max_freq = np.max(freq)
-            min_freq = 50.0 / phys_gyr
-            freq_range = (min_freq, max_freq)
-            angle_range = (0, 2 * np.pi)
-            hist_range = (freq_range, angle_range)
+            if i==0:
+                phys_gyr = 28.05
+                max_freq = np.max(freq)
+                min_freq = 50.0 / phys_gyr
+                freq_range = (min_freq, max_freq)
+                angle_range = (0, 2 * np.pi)
+                hist_range = (freq_range, angle_range)
             _h, angle_vals, freq_vals = np.histogram2d(freq, angle, weights=weights, range=hist_range, bins=nbins)
             h += _h
         return h/n_blocks, angle_range, freq_range

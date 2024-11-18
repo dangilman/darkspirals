@@ -121,14 +121,14 @@ class OrbitExtension(Orbit):
         z_orb = np.squeeze(self.z(t))
         return z_orb
 
-    def minimum_distance_galactic_center(self, time_gyr, ro=8.0, vo=220.0):
+    def minimum_distance_galactic_center(self, disc):
         """
         Compute the minimum distance from the galactic center
         """
-        t_internal = time_gyr / time_in_Gyr(vo, ro)
+        t_internal = disc.time_internal_eval
         x, z, y = self.x(t_internal), self.y(t_internal), self.z(t_internal)
         r_min = np.min(np.sqrt(x**2 + y**2 + z**2))
-        return r_min * ro
+        return r_min * disc.units['ro']
 
     def set_closest_approach(self, r_min, t_min):
         """

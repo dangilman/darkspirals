@@ -7,7 +7,7 @@ from galpy.potential import NFWPotential
 from darkspirals.substructure.halo_util import sample_concentration_nfw, sample_mass_function
 import astropy.units as apu
 import matplotlib.pyplot as plt
-from darkspirals.substructure.dphr import PopulationdSphr
+from darkspirals.substructure.dsphr import PopulationdSphr
 
 class SubstructureRealization(object):
 
@@ -131,7 +131,7 @@ class SubstructureRealization(object):
     @classmethod
     def withDistanceCut(cls, disc, r_min, num_halos_scale=1.0,
                         norm=1200.0, alpha=-1.9, m_high=10**8, m_low=10**6,
-                        num_halos=None, t_max=-1.2, verbose=False):
+                        num_halos=None, t_max=None, verbose=False):
         """
 
         :param disc: an instance of the Disc class
@@ -174,7 +174,12 @@ class SubstructureRealization(object):
                                          pot=pot,
                                          radec=False)
             impact_distance, impact_time = orb.orbit_parameters(disc, t_max)
-            if impact_distance <= r_min and abs(impact_time) <= abs(t_max):
+            if r_min is None and t_max is None:
+                orbits.append(orb)
+                potentials.append(pot)
+                subhalo_masses.append(m)
+                orb.set_closest_approach(impact_distance, impact_time)
+            elif impact_distance <= r_min and abs(impact_time) <= abs(t_max):
                 orbits.append(orb)
                 potentials.append(pot)
                 subhalo_masses.append(m)
