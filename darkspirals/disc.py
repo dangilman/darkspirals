@@ -63,7 +63,20 @@ class Disc(object):
                 _ = self.action_angle_frequency
                 _ = self.action_angle_interp
 
-    def compute_deltaJ_from_forces(self, forces, verbose=False):
+    def _deltaJ_integral(self, v_z, f, omega, t):
+        """
+        Performs the integral to comppute deltaJ
+        :param v_z:
+        :param f:
+        :param omega:
+        :param t:
+        :return:
+        """
+        integrand = v_z * f / omega
+        I = np.squeeze(simps(integrand, x=t))
+        return -I
+
+    def compute_deltaJ_from_forces(self, forces, parallel=False, n_cpu=None, verbose=False):
         """
         Compute the change to the vertical action from an external force
         :param forces: a list of forces acting on the phase space, each force must have shape (n, n, len(time_eval_internal)
@@ -73,12 +86,22 @@ class Disc(object):
         v_z = self._phase_space_orbits.vx(self.time_internal_eval)
         delta_J_list = []
         freq_0 = self.frequency.reshape(self._phase_space_dim, self._phase_space_dim, 1)
-        for counter, f in enumerate(forces):
-            dJ = -np.squeeze(simps(v_z * f / freq_0, x=self.time_internal_eval))
-            if verbose and counter%25==0:
-                percent_done = int(100*counter/len(forces))
-                print('completed '+str(percent_done)+'% of action calculations... ')
-            delta_J_list.append(dJ)
+        if parallel:
+            arg_list = []
+            for counter, f in enumerate(forces):
+                arg = (v_z, f, freq_0, self.time_internal_eval)
+                arg_list.append(arg)
+            with mp.Pool(processes=n_cpu) as pool:
+                delta_J_list = tqdm(
+                    pool.starmap(self._deltaJ_integral, arg_list)
+                )
+        else:
+            for counter, f in enumerate(forces):
+                dJ = self._deltaJ_integral(v_z, f, freq_0, self.time_internal_eval)
+                if verbose and counter%25==0:
+                    percent_done = int(100*counter/len(forces))
+                    print('completed '+str(percent_done)+'% of action calculations... ')
+                delta_J_list.append(dJ)
         return delta_J_list
 
     def compute_satellite_forces(self, satellite_orbit_list=None,
