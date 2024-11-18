@@ -174,6 +174,8 @@ class SubstructureRealization(object):
                                          pot=pot,
                                          radec=False)
             impact_distance, impact_time = orb.orbit_parameters(disc, t_max)
+            if t_max is None:
+                t_max = -10000
             if r_min is None and t_max is None:
                 orbits.append(orb)
                 potentials.append(pot)
