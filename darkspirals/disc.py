@@ -92,9 +92,7 @@ class Disc(object):
                 arg = (v_z, f, freq_0, self.time_internal_eval)
                 arg_list.append(arg)
             with mp.Pool(processes=n_cpu) as pool:
-                delta_J_list = tqdm(
-                    pool.starmap(self._deltaJ_integral, arg_list)
-                )
+                delta_J_list = pool.starmap(self._deltaJ_integral, arg_list)
         else:
             for counter, f in enumerate(forces):
                 dJ = self._deltaJ_integral(v_z, f, freq_0, self.time_internal_eval)
