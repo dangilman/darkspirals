@@ -65,7 +65,7 @@ class Disc(object):
 
     def _deltaJ_integral(self, v_z, f, omega, t):
         """
-        Performs the integral to comppute deltaJ
+        Performs the integral to compute deltaJ
         :param v_z:
         :param f:
         :param omega:
@@ -163,7 +163,6 @@ class Disc(object):
         """
         if not hasattr(self, '_phase_space_orbits'):
             vxvv = np.array(np.meshgrid(self.z_units_internal, self.vz_units_internal)).T
-            #vxvv = np.array(np.meshgrid(self.vz_units_internal, self.z_units_internal)).T
             orbits = Orbit(vxvv, ro=self.units['ro'], vo=self.units['vo'])
             orbits.turn_physical_off()
             orbits.integrate(self.time_internal_eval, self.local_vertical_potential)
@@ -242,7 +241,6 @@ class Disc(object):
 
         """
         Computes action/angle/frequency coordinates at each point in phase space
-        :param parallelize: bool, do the calculation across multiple CPUs (good as long as it's not on a cluster)
         :return: actions, angles, and frequencies in internal units
         """
 

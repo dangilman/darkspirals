@@ -74,7 +74,8 @@ class SubstructureRealization(object):
 
     def add_dwarf_galaxies(self, add_orbit_uncertainties=True,
                            additional_orbits=None, additional_mpeak=None, LMC_effect=False,
-                           t_max=None):
+                           t_max=None, log10_dsphr_masses={}, tidal_stripping=False, stripping_factor=10,
+                           include_dwarf_list=None):
         """
 
         :param tidal_mass_loss:
@@ -83,6 +84,7 @@ class SubstructureRealization(object):
         :param additional_mpeak:
         :param LMC_effect:
         :param t_max:
+        :param m_peak:
         :return:
         """
 
@@ -92,11 +94,19 @@ class SubstructureRealization(object):
         dwarf_orbits = []
         dwarf_galaxy_masses = []
         dwarf_galaxy_names = []
+        if include_dwarf_list is None:
+            include_dwarf_list = pop_dsphr.dwarf_galaxy_names
+        for name in include_dwarf_list:
 
-        for name in pop_dsphr.dwarf_galaxy_names:
+            if name in list(log10_dsphr_masses.keys()):
+                m_peak = 10 ** log10_dsphr_masses[name]
+            else:
+                m_peak = 10 ** pop_dsphr.log10_mpeak_from_name(name)
+            if tidal_stripping:
+                tidal_stripping_factor = np.random.uniform(1/stripping_factor, 1.0)
+                m_peak *= tidal_stripping_factor
 
-            m_peak = 10 ** pop_dsphr.log10_mpeak_from_name(name)
-            potential = pop_dsphr.dsphr_potential_from_name(name)
+            potential = pop_dsphr.dsphr_potential_from_mass(np.log10(m_peak))
             dwarf_potentials.append(potential)
             orbit_init = pop_dsphr.orbit_init_from_name(name, uncertainties=add_orbit_uncertainties)
             orbit = integrate_single_orbit(orbit_init,

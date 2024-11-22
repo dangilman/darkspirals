@@ -1,8 +1,10 @@
 from scipy.interpolate import RegularGridInterpolator
 import numpy as np
-from darkspirals.distribution_function.df_util import fit_sec_squared
+from darkspirals.distribution_function.df_util import fit_sec_squared, action_angle_frequency_sample_parallel
 from scipy.interpolate import interp1d
 from scipy.integrate import simps
+import multiprocessing as mp
+
 
 class DistributionFunctionBase(object):
 
@@ -30,7 +32,16 @@ class DistributionFunctionBase(object):
         self.interp_df = RegularGridInterpolator(points_interp, df)
         self.interp_df_normalized = RegularGridInterpolator(points_interp, df / np.max(df))
 
-    def sample(self, N_samples=1000):
+    def _eval(self, points, disc):
+        """
+        Evaluates Disc class action/angle variables with multi-threading
+        :return:
+        """
+        out = disc.action_angle_interp(points)
+        w = np.squeeze(self.interp_df_normalized(points))
+        return np.column_stack((out, w))
+
+    def sample(self, N_samples=1000, n_cpu=10):
         """
         Draw samples of (z, v_z) from the distribution function with rejection sampling
         :return: (z, v_z) in physical units
@@ -92,22 +103,28 @@ class DistributionFunctionBase(object):
         """
         raise Exception('update params not defined for this class')
 
-    def frequency_angle_representation_grid(self, disc, N_samples=10**8, nbins=50):
+    def frequency_angle_representation_grid(self, disc, N_samples=10**8, nbins=50, flip_angles=True,
+                                            parallel=False, n_cpu=10):
         """
         Derives the distribution function in frequency-angle coordinates on a grid
-        This is essentially the same calculation as in frequency_angle_representation, however, this allows for much
-        higher sampling because the histogram is iteratively updated during the sampling, rather than doing all of the
-        sampling up front, which consumes a lot of RAM
+        This routine allows for more efficient sampling because the histogram is constantly updated with new samples,
+        rather than concatenating samples to a giant array that gets stored in memory and crashes your laptop
+
         :param disc: an instance of Disc used to compute the frequency angle coordinates
         :param N_samples: the number of samples to draw from the phase space distribution
+        :param nbins: the number of bins in the histogram
+        :param flip_angles: bool; flips the array along the "angles" dimension to account for the backwards time
+        integration
+        :param parallel: bool; do the calculation using multi-threading
+        :param n_cpu: number of cpus for multi-threading
         :return: frequency coordinates, angle coordinates, and importance weights
         """
         N_samples = int(N_samples)
-        blocks = int(1e8)
+        blocks = min(int(2e8), N_samples)
         n_blocks = int(N_samples / blocks)
         h = 0
         for i in range(0, n_blocks):
-            freq, angle, weights = self.frequency_angle_representation(disc, blocks)
+            freq, angle, weights = self.frequency_angle_representation(disc, blocks, parallel, n_cpu)
             if i==0:
                 phys_gyr = 28.05
                 max_freq = np.max(freq)
@@ -116,25 +133,48 @@ class DistributionFunctionBase(object):
                 angle_range = (0, 2 * np.pi)
                 hist_range = (freq_range, angle_range)
             _h, angle_vals, freq_vals = np.histogram2d(freq, angle, weights=weights, range=hist_range, bins=nbins)
+            if flip_angles:
+                _h = _h[:, ::-1]
             h += _h
         return h/n_blocks, angle_range, freq_range
 
-    def frequency_angle_representation(self, disc, N_samples=10**7):
+    def frequency_angle_representation(self, disc, N_samples=10**8, parallel=False, n_cpu=10):
         """
         Derives the distribution function in frequency-angle coordinates
         :param disc: an instance of Disc used to compute the frequency angle coordinates
         :param N_samples: the number of samples to draw from the phase space distribution
+        :param parallel: bool; do the calculation using multi-threading
+        :param n_cpu: number of cpus for multi-threading
         :return: frequency coordinates, angle coordinates, and importance weights
         """
-        N_samples = int(N_samples)
         zmin_max = float(np.max(np.absolute(self._z * self._units['ro'])))
         vmin_max = float(np.max(np.absolute(self._v * self._units['vo'])))
-        samples_z = np.random.uniform(-zmin_max, zmin_max, N_samples)
-        samples_vz = np.random.uniform(-vmin_max, vmin_max, N_samples)
-        samples_z_vz = np.column_stack((samples_z, samples_vz))
-        weights = np.squeeze(self.interp_df_normalized(samples_z_vz))
-        out = disc.action_angle_interp(samples_z_vz)
-        action, angle, freq = out[:, 0], out[:, 1], out[:, 2]
+        if parallel:
+            raise Exception('not yet implemented')
+            n_per_cpu = int(N_samples / n_cpu)
+            args = []
+            for i in range(0, n_cpu):
+                samples_z = np.random.uniform(-zmin_max, zmin_max, n_per_cpu)
+                samples_vz = np.random.uniform(-vmin_max, vmin_max, n_per_cpu)
+                points_eval = [np.column_stack((samples_z, samples_vz)), disc]
+                args.append(points_eval)
+            with mp.Pool(processes=n_cpu) as pool:
+                result = pool.starmap(self._eval, args)
+            for i, res in enumerate(result):
+                if i==0:
+                    freq, angle, weights = res[:,0], res[:,1], res[:,-1]
+                else:
+                    freq = np.append(freq, res[:,0])
+                    angle = np.append(angle, res[:, 1])
+                    weights = np.append(weights, res[:,-1])
+        else:
+            N_samples = int(N_samples)
+            samples_z = np.random.uniform(-zmin_max, zmin_max, N_samples)
+            samples_vz = np.random.uniform(-vmin_max, vmin_max, N_samples)
+            samples_z_vz = np.column_stack((samples_z, samples_vz))
+            weights = np.squeeze(self.interp_df_normalized(samples_z_vz))
+            out = disc.action_angle_interp(samples_z_vz)
+            action, angle, freq = out[:, 0], out[:, 1], out[:, 2]
         return freq, angle, weights
 
     def mean_vertical_velocity(self, z=None, subtract_mean=False):

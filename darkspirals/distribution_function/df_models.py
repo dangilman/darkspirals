@@ -44,7 +44,7 @@ class DistributionFunctionIsothermal(DistributionFunctionBase):
         df = 1.0 / np.sqrt(2 * np.pi) / self._velocity_dispersion * np.exp(exp_argument)
         num_pixels = len(exp_argument.ravel())
         normalization = np.sum(df) / num_pixels
-        return 1.0 / np.sqrt(2 * np.pi) / self._velocity_dispersion * np.exp(exp_argument) / normalization
+        return df / normalization
 
 class DistributionFunctionLiandWidrow2021(DistributionFunctionBase):
 
@@ -88,7 +88,7 @@ class DistributionFunctionLiandWidrow2021(DistributionFunctionBase):
 
     def update_params(self, velocity_dispersion=None, alpha=None, vertical_frequency=None):
         """
-        Update the parameters of the vdf; velocity dispersion should be set in physical units (km/sec), while
+        Update the parameters of the df; velocity dispersion should be set in physical units (km/sec), while
         vertical frequency is expected to be in internal galpy units
         :return:
         """
