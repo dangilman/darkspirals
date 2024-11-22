@@ -22,18 +22,24 @@ class Disc(object):
                  time_Gyr_eval, units_ro=8.0, units_vo=220.0, compute_action_angle=True,
                  parallelize_action_angle_computation=True, compute_upfront=True, r_over_r0=1.178):
         """
-
-        :param local_potential:
-        :param galactic_potential:
-        :param z_min_max_kpc:
-        :param vz_min_max_kpc:
-        :param phase_space_pixels:
-        :param time_Gyr_eval:
-        :param units_ro:
-        :param units_vo:
-        :param compute_action_angle:
-        :param parallelize_action_angle_computation:
-        :param compute_upfront:
+        The main class in the module; calculates actions, angles, frequencies for a local gravitational potential
+        :param local_potential: an instance of a galpy potential that specifies the gravitational potential at the solar position
+        :param galactic_potential: an instance of a galpy potential that specifies the gravitational potential of the galaxy
+        in which to integrate orbits
+        :param z_min_max_kpc: the maximum/minimum vertical distance from the midplane in which to calculate
+        actions/angles/frequencies [kpc]
+        :param vz_min_max_kpc: the maximum/minimum vertical velocity for which to calculate actions/angles/frequencies [kpc]
+        :param phase_space_pixels: the resolution of the phase space; will calculate dynamics on an (NxN) grid with
+        N = phase_space_pixels
+        :param time_Gyr_eval: time over which to integrate orbits and calculate the effects of a perturbation; should be
+        a quantity in Gyr with astropy units that goes backwards in time (i.e. starts at t=0 and ends at t = -T)
+        :param units_ro: default galpy internal units [kpc]
+        :param units_vo: default galpy internal units [km/sec]
+        :param compute_action_angle: bool; perform the calculation of action/angle variables
+        :param parallelize_action_angle_computation: bool; do the calculation of action/angle variables with multi-threading
+        :param compute_upfront: bool; calculate action/angle variables and orbits in the equilibrium potential on the grid
+        immediately when creating the class
+        :param r_over_r0: the distance from the galactic center of the solar position in galpy internal units
         """
         turn_physical_off(local_potential)
         turn_physical_off(galactic_potential)
