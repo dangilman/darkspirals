@@ -3,16 +3,8 @@ darkspirals
 ===========
 
 
-.. image:: https://img.shields.io/pypi/v/darkspirals.svg
-        :target: https://pypi.python.org/pypi/darkspirals
-
-.. image:: https://img.shields.io/travis/dangilman/darkspirals.svg
-        :target: https://travis-ci.com/dangilman/darkspirals
-
-.. image:: https://readthedocs.org/projects/darkspirals/badge/?version=latest
-        :target: https://darkspirals.readthedocs.io/en/latest/?version=latest
-        :alt: Documentation Status
-
+.. image:: https://github.com/dangilman/darkspirals/blob/main/perturber_figure.jpeg
+        :target: https://github.com/dangilman/darkspirals/blob/main/perturber_figure.jpeg
 
 
 
