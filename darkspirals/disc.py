@@ -69,7 +69,17 @@ class Disc(object):
                 _ = self.action_angle_frequency
                 _ = self.action_angle_interp
 
-    def _deltaJ_integral(self, v_z, f, omega, t):
+    def delta_v_kick(self, force):
+        """
+        Computes the impulse from perturbing forces
+        :param force: a numpy array with shape(N, N, N_T), where N is the resolution
+        of the (z, vz) grid and N_T is the number of time steps in the orbit integration
+        :return: integral f * t
+        """
+        delta_v = simps(force, x=self.time_internal_eval)
+        return delta_v
+
+    def _deltaJ_integral(self, v_z, f, omega, t, delta_v):
         """
         Performs the integral to compute deltaJ
         :param v_z:
@@ -78,16 +88,24 @@ class Disc(object):
         :param t:
         :return:
         """
-        integrand = v_z * f / omega
+        integrand = (v_z + delta_v) * f / omega
         I = np.squeeze(simps(integrand, x=t))
-        return -I
+        return I
 
-    def compute_deltaJ_from_forces(self, forces, parallel=False, n_cpu=None, verbose=False):
+    def compute_deltaJ_from_forces(self, forces, parallel=False, n_cpu=None, delta_v_kick=False,
+                                   verbose=False):
         """
         Compute the change to the vertical action from an external force
-        :param forces: a list of forces acting on the phase space, each force must have shape (n, n, len(time_eval_internal)
-        :param verbose: make print statements
-        :return: a list of action perturbations of the same length as forces
+        :param forces: a list of external forces, should be a numpy array with shape(N, N, N_T), where N is the resolution
+        of the (z, vz) grid and N_T is the number of time steps in the orbit integration
+        :param parallel: bool; do the calculation with multi-threading
+        :param n_cpu: number of CPUs for multi-threading
+        :param delta_v_kick: True, False, or None; This removes a singularity for orbits with J_z = 0.0 and performs
+        deltaJ calculation with v_z -> v_z + delta_vz
+        if False: ignores this term
+        if True: calculates the impulse, delta_vz, from each perturbing force
+        if numpy array or float: use the specified delta_vz
+        :return: a list of numpy arrays of shape (N, N) that contain deltaJs corresponding to each perturbation
         """
         v_z = self._phase_space_orbits.vx(self.time_internal_eval)
         delta_J_list = []
@@ -95,13 +113,29 @@ class Disc(object):
         if parallel:
             arg_list = []
             for counter, f in enumerate(forces):
-                arg = (v_z, f, freq_0, self.time_internal_eval)
+                if delta_v_kick is False:
+                    delta_vz = 0.0
+                else:
+                    if isinstance(delta_v_kick, float) or isinstance(delta_v_kick, np.ndarray):
+                        delta_vz = np.ones_like(f) * delta_v_kick
+                    else:
+                        delta_vz = self.delta_v_kick(f)
+                        delta_vz = delta_vz[:, :, np.newaxis]
+                arg = (v_z, f, freq_0, self.time_internal_eval, delta_vz)
                 arg_list.append(arg)
             with mp.Pool(processes=n_cpu) as pool:
                 delta_J_list = pool.starmap(self._deltaJ_integral, arg_list)
         else:
             for counter, f in enumerate(forces):
-                dJ = self._deltaJ_integral(v_z, f, freq_0, self.time_internal_eval)
+                if delta_v_kick is False:
+                    delta_vz = 0.0
+                else:
+                    if isinstance(delta_v_kick, float) or isinstance(delta_v_kick, np.ndarray):
+                        delta_vz = np.ones_like(f) * delta_v_kick
+                    else:
+                        delta_vz = self.delta_v_kick(f)
+                        delta_vz = delta_vz[:, :, np.newaxis]
+                dJ = self._deltaJ_integral(v_z, f, freq_0, self.time_internal_eval, delta_vz)
                 if verbose and counter%25==0:
                     percent_done = int(100*counter/len(forces))
                     print('completed '+str(percent_done)+'% of action calculations... ')
@@ -251,19 +285,23 @@ class Disc(object):
         """
 
         if not hasattr(self, '_action'):
+
             nz, nv = len(self.z_units_internal), len(self.vz_units_internal)
             action = np.empty([nz, nv])
             frequency = np.empty([nz, nv])
             angle = np.empty([nz, nz])
             aAV = actionAngleVertical(pot=self.local_vertical_potential)
+            # r in dimension 0, v in dimension 1
+            vxvv = np.array(np.meshgrid(self.z_units_internal, self.vz_units_internal)).T
+            z = vxvv[:, :, 0].ravel()
+            vz = vxvv[:, :, 1].ravel()
             if self._parallelize:
                 action = action.ravel()
                 frequency = frequency.ravel()
                 angle = angle.ravel()
                 arg_list = []
-                for i, zval in enumerate(self.z_units_internal):
-                    for j, vval in enumerate(self.vz_units_internal):
-                        arg_list.append((zval, vval))
+                for i in range(0, len(z)):
+                    arg_list.append((z[i], vz[i]))
                 pool = Pool(int(os.cpu_count()))
                 out = pool.starmap(aAV.actionsFreqsAngles, arg_list)
                 pool.close()
@@ -276,19 +314,24 @@ class Disc(object):
                 angle = angle.reshape(nz, nv)
                 frequency = frequency.reshape(nz, nv)
             else:
-                for i, zval in enumerate(self.z_units_internal):
-                    for j, vval in enumerate(self.vz_units_internal):
-                        J, freq, theta = aAV.actionsFreqsAngles(zval, vval)
-                        action[i, j] = J
-                        angle[i, j] = theta
-                        frequency[i, j] = freq
-                        try:
-                            assert np.isfinite(J)
-                            assert np.isfinite(freq)
-                            assert np.isfinite(theta)
-                        except:
-                            print('undefined result with ', (zval, vval))
-                            exit(1)
+                action = np.empty([nz, nv]).ravel()
+                frequency = np.empty([nz, nv]).ravel()
+                angle = np.empty([nz, nz]).ravel()
+                for i in range(0, len(z)):
+                    J, freq, theta = aAV.actionsFreqsAngles(z[i], vz[i])
+                    action[i] = J
+                    angle[i] = theta
+                    frequency[i] = freq
+                    try:
+                        assert np.isfinite(J)
+                        assert np.isfinite(freq)
+                        assert np.isfinite(theta)
+                    except:
+                        print('undefined result with ', (z[i], vz[i]))
+                        exit(1)
+                action = action.reshape(nz, nv)
+                frequency = frequency.reshape(nz, nv)
+                angle = angle.reshape(nz, nv)
             self._action = action
             self._angle = angle
             self._frequency = frequency
