@@ -50,86 +50,25 @@ class DiffusionBase(object):
         """
         raise Exception('call method not specified!')
 
-class DiffusionConvolution(DiffusionBase):
-
-    def __call__(self, deltaJ, impact_time_gyr, df_model, diffusion_coefficients=None,
-                 diffusion_timescale=0.6, verbose=False):
-        """
-
-        :param deltaJ:
-        :param impact_time_gyr:
-        :param df_model:
-        :param diffusion_coefficients:
-        :param diffusion_timescale:
-        :return:
-        """
-        if diffusion_coefficients is None:
-            if df_model == 'ISOTHERMAL':
-                diffusion_coefficients = (0.042, 1.47)
-            else:
-                diffusion_coefficients = (0.045, 1.47)
-        j0 = np.mean(self._disc_model.action)
-        omega0 = np.mean(self._disc_model.frequency)
-        tau = abs(impact_time_gyr) / diffusion_timescale
-        prefactor = diffusion_coefficients[0] * tau ** diffusion_coefficients[1]
-        kernel_z = np.sqrt(j0 / omega0) * self._disc_model.units['ro']
-        kernel_vz = np.sqrt(j0 * omega0) * self._disc_model.units['vo']  # internal units now
-        num_pixel_per_kpc = len(self._disc_model.z_units_internal) / \
-                            (np.max(self._disc_model.z_units_internal) - np.min(self._disc_model.z_units_internal)) / self._disc_model.units['ro']
-        num_pixel_per_vz = len(self._disc_model.vz_units_internal) / \
-                           (np.max(self._disc_model.vz_units_internal) - np.min(self._disc_model.vz_units_internal)) / self._disc_model.units['vo']
-        kernel_pixel_z = prefactor * kernel_z * num_pixel_per_kpc
-        kernel_pixel_vz = prefactor * kernel_vz * num_pixel_per_vz
-        if verbose:
-            print('impact time: ', impact_time_gyr)
-            print('kernel pixel sizes (z, vz): ', kernel_pixel_z, kernel_pixel_vz)
-        if kernel_pixel_z < 0 or kernel_pixel_vz < 0:
-            raise Exception('pixel sizes for convolution should be greater than or equal to zero pixels')
-        else:
-            if kernel_pixel_z == 0 or kernel_pixel_vz == 0:
-                dJ = deltaJ
-            else:
-                dJ = gaussian_filter(deltaJ, (kernel_pixel_z, kernel_pixel_vz))
-        return np.squeeze(dJ)
-
-class DiffusionRescaling(DiffusionBase):
-
-    def __call__(self, deltaJ, impact_time_gyr, df_model, diffusion_coefficients=None,
-                 diffusion_timescale=0.6, verbose=False):
-        """
-
-        :param deltaJ:
-        :param impact_time_gyr:
-        :param df_model:
-        :param diffusion_coefficients:
-        :param diffusion_timescale:
-        :return:
-        """
-        if diffusion_coefficients is None:
-            if df_model == 'ISOTHERMAL':
-                diffusion_coefficients = (2.2, 4.0)
-            else:
-                diffusion_coefficients = (2.2, 4.0)
-        tau = abs(impact_time_gyr / diffusion_timescale)
-        rescaling = 1.0/(1+diffusion_coefficients[0]*tau**diffusion_coefficients[1])
-        dJ = np.ones_like(deltaJ) * deltaJ * rescaling
-        return np.squeeze(dJ)
-
 class DiffusionConvolutionSpatiallyVarying(DiffusionBase):
 
     def __call__(self, deltaJ, impact_time_gyr, df_model, diffusion_coefficients=None,
                  diffusion_timescale=0.6, verbose=False):
         """
-
-        :param deltaJ:
-        :param impact_time_gyr:
-        :param df_model:
-        :param diffusion_coefficients:
-        :param diffusion_timescale:
-        :return:
+        This class implements diffusion across the distribution function through a series of Gaussian convolutions with
+        spatially varying kernels
+        :param deltaJ: a numpy array giving the perturbation to the vertical action
+        :param impact_time_gyr: time since a perturbation event [Gyr]; should be a positive number
+        :param df_model: a string specifying the distribution function; currently this is not used
+        :param diffusion_coefficients: coefficients that normalize the diffusion kernels; will take on default values
+        if not specified
+        :param diffusion_timescale: the timescale for the diffusion process, defined as the time when a perturbation is
+        dampled by 1/e
+        :param verbose: make print statements
+        :return: a numpy array with the same shape as deltaJ
         """
         if diffusion_coefficients is None:
-            diffusion_coefficients = (0.28, 1.15)
+            diffusion_coefficients = (0.24, 1.0)
 
         tau = abs(impact_time_gyr) / diffusion_timescale
         prefactor = diffusion_coefficients[0] * tau ** diffusion_coefficients[1]

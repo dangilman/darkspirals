@@ -1,5 +1,6 @@
 import numpy.testing as npt
 import pytest
+from darkspirals.substructure.realization import SubstructureRealization
 from darkspirals.disc import Disc
 import astropy.units as apu
 from galpy.potential import MWPotential2014
@@ -18,7 +19,7 @@ class TestDisc(object):
         self.n_time_steps = 1000
         self.time_Gyr = np.linspace(0.0, -1.0, self.n_time_steps) * apu.Gyr
         self.disc = Disc(galactic_potential, galactic_potential, z_min_max, vz_min_max, self.phase_space_resolution,
-                    self.time_Gyr, parallelize_action_angle_computation=True, compute_upfront=False)
+                    self.time_Gyr, parallelize_action_angle_computation=True, compute_upfront=False, r_over_r0=1.0)
 
     def test_internal_units(self):
 
@@ -45,6 +46,20 @@ class TestDisc(object):
         npt.assert_almost_equal(jz[0], action, 2)
         npt.assert_almost_equal(theta[0], angle, 2)
         npt.assert_almost_equal(freq[0], freq, 2)
+
+    def test_deltaJ(self):
+
+        np.random.seed(8)
+        realization = SubstructureRealization.withDistanceCut(self.disc, norm=0.0, r_min=10,
+                                                              num_halos_scale=1.0,
+                                                              m_low=10 ** 6.7,
+                                                              m_high=10 ** 8.0,
+                                                              t_max=-1.2)
+        realization.add_dwarf_galaxies(add_orbit_uncertainties=True,
+                                       tidal_stripping=False,
+                                       include_dwarf_list=['Tucana III'],
+                                       log10_dsphr_masses={'Tucana III': 9.})
+
 
 
 
