@@ -9,7 +9,7 @@ from galpy.actionAngle import actionAngleVerticalInverse
 from multiprocessing.pool import Pool
 from galpy.potential import verticalfreq
 from darkspirals.orbit_util import satellite_vertical_force
-from scipy.integrate import simps
+from scipy.integrate import simpson
 from galpy.potential import turn_physical_off
 import os
 from tqdm import tqdm
@@ -20,7 +20,7 @@ class Disc(object):
 
     def __init__(self, local_potential, galactic_potential, z_min_max_kpc, vz_min_max_kpc, phase_space_pixels,
                  time_Gyr_eval, units_ro=8.0, units_vo=220.0, compute_action_angle=True,
-                 parallelize_action_angle_computation=True, compute_upfront=True, r_over_r0=1.178):
+                 parallelize_action_angle_computation=True, compute_upfront=True, r_over_r0=1.0225):
         """
         The main class in the module; calculates actions, angles, frequencies for a local gravitational potential
         :param local_potential: an instance of a galpy potential that specifies the gravitational potential at the solar position
@@ -69,16 +69,6 @@ class Disc(object):
                 _ = self.action_angle_frequency
                 _ = self.action_angle_interp
 
-    def delta_v_kick(self, force):
-        """
-        Computes the impulse from perturbing forces
-        :param force: a numpy array with shape(N, N, N_T), where N is the resolution
-        of the (z, vz) grid and N_T is the number of time steps in the orbit integration
-        :return: integral f * t
-        """
-        delta_v = simps(force, x=self.time_internal_eval)
-        return delta_v
-
     def _deltaJ_integral(self, v_z, f, omega, t, delta_v):
         """
         Performs the integral to compute deltaJ
@@ -89,7 +79,7 @@ class Disc(object):
         :return:
         """
         integrand = (v_z + delta_v) * f / omega
-        I = np.squeeze(simps(integrand, x=t))
+        I = np.squeeze(simpson(integrand, x=t))
         return I
 
     def compute_deltaJ_from_forces(self, forces, parallel=False, n_cpu=None, delta_v_kick=False,
@@ -109,33 +99,17 @@ class Disc(object):
         """
         v_z = self._phase_space_orbits.vx(self.time_internal_eval)
         delta_J_list = []
-        freq_0 = self.frequency.reshape(self._phase_space_dim, self._phase_space_dim, 1)
+        freq_0 = self.frequency[:, :, np.newaxis]
         if parallel:
             arg_list = []
             for counter, f in enumerate(forces):
-                if delta_v_kick is False:
-                    delta_vz = 0.0
-                else:
-                    if isinstance(delta_v_kick, float) or isinstance(delta_v_kick, np.ndarray):
-                        delta_vz = np.ones_like(f) * delta_v_kick
-                    else:
-                        delta_vz = self.delta_v_kick(f)
-                        delta_vz = delta_vz[:, :, np.newaxis]
-                arg = (v_z, f, freq_0, self.time_internal_eval, delta_vz)
+                arg = (v_z, f, freq_0, self.time_internal_eval)
                 arg_list.append(arg)
             with mp.Pool(processes=n_cpu) as pool:
                 delta_J_list = pool.starmap(self._deltaJ_integral, arg_list)
         else:
             for counter, f in enumerate(forces):
-                if delta_v_kick is False:
-                    delta_vz = 0.0
-                else:
-                    if isinstance(delta_v_kick, float) or isinstance(delta_v_kick, np.ndarray):
-                        delta_vz = np.ones_like(f) * delta_v_kick
-                    else:
-                        delta_vz = self.delta_v_kick(f)
-                        delta_vz = delta_vz[:, :, np.newaxis]
-                dJ = self._deltaJ_integral(v_z, f, freq_0, self.time_internal_eval, delta_vz)
+                dJ = self._deltaJ_integral(v_z, f, freq_0, self.time_internal_eval)
                 if verbose and counter%25==0:
                     percent_done = int(100*counter/len(forces))
                     print('completed '+str(percent_done)+'% of action calculations... ')
