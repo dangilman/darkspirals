@@ -69,7 +69,7 @@ class Disc(object):
                 _ = self.action_angle_frequency
                 _ = self.action_angle_interp
 
-    def _deltaJ_integral(self, v_z, f, omega, t, delta_v):
+    def _deltaJ_integral(self, v_z, f, omega, t):
         """
         Performs the integral to compute deltaJ
         :param v_z:
@@ -78,23 +78,17 @@ class Disc(object):
         :param t:
         :return:
         """
-        integrand = (v_z + delta_v) * f / omega
+        integrand = v_z * f / omega
         I = np.squeeze(simpson(integrand, x=t))
         return I
 
-    def compute_deltaJ_from_forces(self, forces, parallel=False, n_cpu=None, delta_v_kick=False,
-                                   verbose=False):
+    def compute_deltaJ_from_forces(self, forces, parallel=False, n_cpu=None, verbose=False):
         """
         Compute the change to the vertical action from an external force
         :param forces: a list of external forces, should be a numpy array with shape(N, N, N_T), where N is the resolution
         of the (z, vz) grid and N_T is the number of time steps in the orbit integration
         :param parallel: bool; do the calculation with multi-threading
         :param n_cpu: number of CPUs for multi-threading
-        :param delta_v_kick: True, False, or None; This removes a singularity for orbits with J_z = 0.0 and performs
-        deltaJ calculation with v_z -> v_z + delta_vz
-        if False: ignores this term
-        if True: calculates the impulse, delta_vz, from each perturbing force
-        if numpy array or float: use the specified delta_vz
         :return: a list of numpy arrays of shape (N, N) that contain deltaJs corresponding to each perturbation
         """
         v_z = self._phase_space_orbits.vx(self.time_internal_eval)
@@ -120,7 +114,7 @@ class Disc(object):
                                  satellite_potentials_list=None,
                                  verbose=False,
                                  parallel=False,
-                                 n_cpu=6,
+                                 n_cpu=10,
                                  t_max=None):
 
         """
