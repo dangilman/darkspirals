@@ -104,10 +104,11 @@ class OrbitExtension(Orbit):
 
     def vertical_distance_from_solar_position(self, disc, t_max=None):
         """
-
-        :param disc:
-        :param t_max:
-        :return:
+        Calculate the vertical distance of the perturber from the solar position as a function of time
+        :param disc: an instance of Disc
+        :param t_max: ignore positions of the halo at times > |t_max|; t_max should be a negative number that specifies
+        a time in the past in Gyr
+        :return: vertical distance as a function of time in kpc
         """
         _x_solar, _y_solar = disc.solar_circle
         self.turn_physical_off()
@@ -119,11 +120,11 @@ class OrbitExtension(Orbit):
             indexes = np.where(disc.time_internal_eval >= t_max_interal)[0]
             t = disc.time_internal_eval[indexes]
         z_orb = np.squeeze(self.z(t))
-        return z_orb
+        return z_orb * disc.units['ro']
 
     def minimum_distance_galactic_center(self, disc):
         """
-        Compute the minimum distance from the galactic center
+        Compute the minimum distance from the galactic center of the perturber orbit in kpc
         """
         t_internal = disc.time_internal_eval
         x, z, y = self.x(t_internal), self.y(t_internal), self.z(t_internal)
@@ -219,10 +220,10 @@ class OrbitExtension(Orbit):
     def deltaJ(self, disc, physical_units=False, t_max=None):
         """
         Compute the perturbation to the action at the solar position
-        :param disc:
-        :param physical_units:
-        :param t_max: force is set to zero for t < t_max (t_max is < 0)
-        :return:
+        :param disc: an instance of Disc
+        :param physical_units: if True, returns action in units kpc * km / sec
+        :param t_max: force is set to zero for t < t_max (t_max is negative number in Gyr)
+        :return: the change to the vertical action at the solar position caused by the satellite
         """
         f, _, _ = disc.compute_satellite_forces(satellite_orbit_list=[self],
                                           satellite_potentials_list=[self.potential],
@@ -253,7 +254,7 @@ def integrate_single_orbit(orbit_init, disc, pot,
 
 def sample_sag_orbit(scale_uncertainties=1.0):
     """
-
+    Generate an orbit for Sagittarius
     :param scale_uncertainties:
     :return:
     """

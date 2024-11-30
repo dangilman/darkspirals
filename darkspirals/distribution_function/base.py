@@ -41,10 +41,11 @@ class DistributionFunctionBase(object):
         w = np.squeeze(self.interp_df_normalized(points))
         return np.column_stack((out, w))
 
-    def sample(self, N_samples=1000, n_cpu=10):
+    def _sample_single_cpu(self, N_samples):
         """
-        Draw samples of (z, v_z) from the distribution function with rejection sampling
-        :return: (z, v_z) in physical units
+        Sample from the distribution function on a single cpu core
+        :param N_samples: number of samples to draw
+        :return: samples from the df in physical units
         """
         z = []
         vz = []
@@ -58,7 +59,33 @@ class DistributionFunctionBase(object):
                 vz.append(_vz)
             if len(z) == N_samples:
                 break
-        return np.array(z), np.array(vz)
+        return [np.array(z), np.array(vz)]
+
+    def sample(self, N_samples=1000, n_cpu=10):
+        """
+        Draw samples of (z, v_z) from the distribution function with rejection sampling
+        :return: (z, v_z) in physical units
+        """
+        if n_cpu == 1:
+            samples = self._sample_single_cpu(N_samples)
+            z_samples = samples[0]
+            vz_samples = samples[1]
+        else:
+            n_samples = int(N_samples / n_cpu)
+            arg_list = []
+            for i in range(0, int(n_cpu)):
+                arg = (n_samples)
+                arg_list.append(arg)
+            with mp.Pool(processes=n_cpu) as pool:
+                samples_list = pool.map(self._sample_single_cpu, arg_list)
+            z_samples = np.empty(int(n_samples * n_cpu))
+            vz_samples = np.empty(int(n_samples * n_cpu))
+            for i in range(0, n_cpu):
+                i_min = i * n_samples
+                i_max = (i+1) * n_samples
+                z_samples[i_min:i_max] = samples_list[i][0]
+                vz_samples[i_min:i_max] = samples_list[i][1]
+        return np.squeeze(z_samples), np.squeeze(vz_samples)
 
     def sample_action_angle_freq(self, disc, N_samples=10000, physical_output=False, z_max=None, vz_max=None):
         """

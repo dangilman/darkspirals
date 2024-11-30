@@ -171,8 +171,7 @@ class Disc(object):
         """
         if not hasattr(self, '_phase_space_orbits'):
             vxvv = np.array(np.meshgrid(self.z_units_internal, self.vz_units_internal)).T
-            orbits = Orbit(vxvv, ro=self.units['ro'], vo=self.units['vo'])
-            orbits.turn_physical_off()
+            orbits = Orbit(vxvv)
             orbits.integrate(self.time_internal_eval, self.local_vertical_potential)
             self._phase_space_orbits = orbits
         return self._phase_space_orbits

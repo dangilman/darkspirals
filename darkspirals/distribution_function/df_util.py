@@ -1,6 +1,8 @@
 import numpy as np
 from scipy.optimize import minimize
 import multiprocessing as mp
+import matplotlib.pyplot as plt
+
 
 def _sec_square_func_to_min(x, zdata, rho_data):
     n0, zsun, H1 = x[0], x[1], x[2]
@@ -99,3 +101,45 @@ def action_angle_frequency_sample_parallel(df_list, disc, n_cpu=10, n_per_cpu=10
                 w1 = np.append(w1, np.array(_weight_list[1]))
                 w2 = np.append(w2, np.array(_weight_list[2]))
         return action, angle, freq, [w0, w1, w2]
+
+def plot_df_perturbation(df, df_eq, filename=None, annotation='', show_plot=False):
+    """
+    Makes a plot of a perturbation to the distribution function
+    :param df: perturbed distribution function class (see classes in df_models)
+    :param df_eq: equilibrium distribution function class (see classes in df_models)
+    :param filename: if a string, will save the figure with that path/filename
+    """
+    try:
+        from palettable.scientific.diverging import Vik_20 as colormaps
+        cmap = colormaps.get_mpl_colormap()
+    except:
+        print('could not use default color map because palettable is not installed, using bwr instead')
+        cmap = 'bwr'
+    cbar_label_pad = -12
+    cbar_ticks = [0.9, 0.95, 1.0, 1.05, 1.1]
+    cbar_tick_labels = [r'$-0.1$', r'$-0.05$', r'$0.0$', r'$0.05$', r'$0.1$']
+    fig = plt.figure()
+    ax = plt.subplot(111)
+    vminmax = 0.1
+    im = ax.imshow(np.rot90(df.function / df_eq.function), origin='upper', vmin=1 - vminmax,
+                   vmax=1. + vminmax, cmap=cmap)
+    ax.annotate(annotation, xy=(0.03, 0.82), xycoords='axes fraction',
+                bbox=dict(facecolor='w', edgecolor='k', pad=5.0, alpha=0.8), fontsize=12)
+    # cbar = plt.colorbar(im, ax=ax, pad=0.025)
+    # cbar.set_ticks(cbar_ticks)
+    # cbar.set_ticklabels(cbar_tick_labels)
+    # cbar.set_label(r'$\delta f\left(z, v_z\right)$', labelpad=cbar_label_pad, fontsize=16)
+    # cbar.ax.tick_params(labelsize=14)
+    zticks = [r'$-1.5$', r'$-0.75$', r'$0.0$', r'$0.75$', r'$1.5$']
+    vzticks = [r'$100$', r'$50$', r'$0$', r'$-50$', r'$-100$']
+    ax.set_xticks([0, 25, 50, 75, 100])
+    ax.set_yticks([0, 25, 50, 75, 100])
+    ax.set_xticklabels(zticks, fontsize=15)
+    ax.set_yticklabels(vzticks, fontsize=15)
+    ax.set_xlabel(r'$z \ \left[\rm{kpc}\right]$', fontsize=16, labelpad=-0)
+    ax.set_ylabel(r'$v_z \ \left[ \rm{km} \ \rm{s^{-1}}\right]$', fontsize=16, labelpad=-8)
+    plt.tight_layout()
+    if filename is not None:
+        plt.savefig(filename, bbox_inches='tight')
+    if show_plot:
+        plt.show()

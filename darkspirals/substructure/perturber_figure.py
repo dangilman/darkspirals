@@ -22,7 +22,8 @@ disc = Disc(galactic_potential, galactic_potential, z_min_max, vz_min_max, phase
 r_min = 20
 realization = SubstructureRealization.withDistanceCut(disc, norm=1200 * 1.0, r_min=r_min,
                                                       num_halos_scale=1.0, m_low=10**6.5, m_high=10**8)
-realization.add_dwarf_galaxies(add_orbit_uncertainties=False)
+realization.add_dwarf_galaxies(add_orbit_uncertainties=False,
+                               )
 
 print('realization contains '+str(len(realization.subhalo_orbits))+' subhalos')
 print('realization contains '+str(len(realization.dwarf_galaxy_potentials))+' dwarf galaxies')

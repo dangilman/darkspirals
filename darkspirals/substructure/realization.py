@@ -10,23 +10,39 @@ import matplotlib.pyplot as plt
 from darkspirals.substructure.dsphr import PopulationdSphr
 
 class SubstructureRealization(object):
+    """
+    This class is used to create and store the orbits of perturbers, both luminous and dark satellites.
 
-    def __init__(self, disc, orbits, potentials, subhalo_masses, dwarf_galaxies_added=False):
-
+    The main class methods include the class creation method "withDistanceCut" and the method "add_dwarf_galaxies".
+    """
+    def __init__(self, disc, orbits, potentials, subhalo_masses=None, dwarf_galaxies_added=False):
+        """
+        Instantiate the class from an instance of Disc, and orbits/potentials/masses of perturbers
+        :param disc: an instance of Disc class
+        :param orbits: a list of perturber orbits; can be either galpy Orbit classes or the OrbitExtension class in
+        darkspirals (see orbit_util.py)
+        :param potentials: a list of galpy potential instances, should be the same length as orbits
+        :param subhalo_masses: the masses of the perturbers corresponding to potentials
+        :param dwarf_galaxies_added: bool; keeps track of whether the class has had dwarf galaxies included upon creation
+        """
         self._disc = disc
         self._subhalo_orbits = orbits
         self._subhalo_potentials = potentials
         self._dwarf_galaxy_orbits = []
         self._dwarf_galaxy_potentials = []
-        self._dwarf_galaxies_added = dwarf_galaxies_added
         self._subhalo_masses = subhalo_masses
         self._dwarf_galaxy_masses = []
-        self._dwarf_galaxies_added = False
         self.pop_dsphr = None
+        self._dwarf_galaxies_added = dwarf_galaxies_added
 
     @classmethod
     def join(cls, realization1, realization2):
-
+        """
+        Combines two SubstructureRealization into one
+        :param realization1: one SubstructureRealization
+        :param realization2: another SubstructureRealization class
+        :return: one SubstructureRealization that includes perturbers from both realization1 and realization2
+        """
         return SubstructureRealization(realization1._disc,
                                 realization1.subhalo_orbits + realization2.subhalo_orbits,
                                 realization1.subhalo_potentials + realization2.subhalo_potentials,
@@ -77,15 +93,23 @@ class SubstructureRealization(object):
                            t_max=None, log10_dsphr_masses={}, tidal_stripping=False, stripping_factor=10,
                            include_dwarf_list=None):
         """
+        Add a population of dwarf galaxies; the default masses and kinematics are stored in the PopulationdSphr class
+        (see dsphr.py)
 
-        :param tidal_mass_loss:
-        :param add_orbit_uncertainties:
-        :param additional_orbits:
-        :param additional_mpeak:
-        :param LMC_effect:
-        :param t_max:
-        :param m_peak:
-        :return:
+        :param add_orbit_uncertainties: bool; add orbit uncertainties to the dwarf galaxies
+        :param additional_orbits: an additional list of objects to include; each object name in additional_orbits should
+        have a corresponding mass specified in additional_mpeak
+        :param additional_mpeak: a dictionary that contains the log10(masses) corresponding to each object name in additional_orbits
+        For example:
+        additional_orbits = ['thing1', 'thing2']
+        additinal_mpeak = {'thing1': 8.0, 'thing2': 8.7}
+        :param LMC_effect: turn on/off LMC effects; note that this argument is not currently in use
+        :param t_max: ignores any perturbation at t>|t_max| Gyr in the past; t_max should be a negative number in units of
+        Gyr
+        :param log10_dsphr_masses: overrides the default dSphr. masses stored in the PopulationdSphr class (see dsphr.py)
+        :param tidal_stripping: bool; if True, adds random rescaling factors to dwarf galaxies between (1/stripping_factor - 1)
+        :param stripping_factor: see above
+        :param include_dwarf_list: a list of dwarf galaxies to include, overrides the default list in PopulationdSphr
         """
 
         pop_dsphr = PopulationdSphr()
@@ -103,9 +127,13 @@ class SubstructureRealization(object):
             else:
                 m_peak = 10 ** pop_dsphr.log10_mpeak_from_name(name)
             if tidal_stripping:
-                tidal_stripping_factor = np.random.uniform(1/stripping_factor, 1.0)
-                m_peak *= tidal_stripping_factor
-
+                if name in list(log10_dsphr_masses.keys()):
+                    print(name, np.log10(m_peak))
+                    pass
+                else:
+                    tidal_stripping_factor = np.random.uniform(1/stripping_factor, 1.0)
+                    m_peak *= tidal_stripping_factor
+                    print(name, np.log10(m_peak), tidal_stripping_factor)
             potential = pop_dsphr.dsphr_potential_from_mass(np.log10(m_peak))
             dwarf_potentials.append(potential)
             orbit_init = pop_dsphr.orbit_init_from_name(name, uncertainties=add_orbit_uncertainties)
@@ -146,7 +174,7 @@ class SubstructureRealization(object):
 
         :param disc: an instance of the Disc class
         :param r_min: the minimum distance a subhalo comes from the galactic center
-        :param num_halos_scale: scales the number of halos/normalization
+        :param num_halos_scale: linearly scales the number of halos, the same as increaing the normlaization
         :param norm: the normalization of the SHMF; this parameter is chosen by sampling orbits from the kde, integrating them,
         and then selecting objects that pass within 40 kpc of the solar position. Galacticus predicts ~ 370 objects that pass within
         40 kpc of the galactic center with mass between 10^6.7 and 10^9. Setting norm = 1000 reproduces this number of objects from the method used to sample orbits
@@ -155,7 +183,7 @@ class SubstructureRealization(object):
         :param m_low: the lower mass limit for subhalos
         :param num_halos: number of halos to generate, overrides calculation based on norm parameter
         :param t_max: discard subhalos with impact times greater than this
-        :return: an instance of Realization
+        :return: an instance of Realization that includes subhalos
         """
         _subhalo_masses = sample_mass_function(num_halos_scale * norm,
                                               alpha,
