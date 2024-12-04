@@ -15,9 +15,13 @@ Features
 - approximate calculation of changes to the vertical action caused by satellite fly-bys  
 - diffusion model for scattering between stars and giant molecular clouds 
 
+Installation
+--------
+git clone https://github.com/dangilman/darkspirals.git; cd darkspirals; python setup.py install
+
 Credits
 -------
-If you use this software for your work, please cite Gilman et al. (2024) 
+If you use this software for your work, please link to this repository and cite Gilman et al. (2024) 
 
 * Free software: MIT license
 This package was created with Cookiecutter_ and the `audreyr/cookiecutter-pypackage`_ project template.
