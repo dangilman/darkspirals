@@ -17,7 +17,9 @@ Features
 
 Installation
 --------
-git clone https://github.com/dangilman/darkspirals.git; cd darkspirals; python setup.py install
+You can install the code by cloning this repository. Navigate to where you want to store the code on your local machine and enter the following in the terminal: 
+
+git clone https://github.com/dangilman/darkspirals.git; cd darkspirals; python setup.py develop --user
 
 Credits
 -------
