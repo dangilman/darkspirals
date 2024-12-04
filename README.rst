@@ -3,8 +3,8 @@ darkspirals
 ===========
 
 
-.. image:: https://github.com/dangilman/darkspirals/blob/main/perturber_figure.pdf
-        :target: https://github.com/dangilman/darkspirals/blob/main/perturber_figure.pdf
+.. image:: https://github.com/dangilman/darkspirals/blob/main/perturber_figure.jpeg
+        :target: https://github.com/dangilman/darkspirals/blob/main/perturber_figure.jpeg
 
 A python package to forward model the formation of phase-space spirals with dark and luminous galactic satellites. 
 
