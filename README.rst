@@ -10,10 +10,10 @@ A python package to forward model the formation of phase-space spirals with dark
 
 Features
 --------
-- generate realistic subhalo populations, including their orbits and masses 
+- generation of realistic subhalo populations, including their orbits and masses 
 - flexible parameterization of the Galactic potential, and the potential of the disk in the solar neighborhood 
 - approximate calculation of changes to the vertical action caused by satellite fly-bys  
-
+- diffusion model for scattering between stars and giant molecular clouds 
 
 Credits
 -------
