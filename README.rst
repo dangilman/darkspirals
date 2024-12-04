@@ -3,15 +3,10 @@ darkspirals
 ===========
 
 
-.. image:: https://github.com/dangilman/darkspirals/blob/main/perturber_figure.jpeg
-        :target: https://github.com/dangilman/darkspirals/blob/main/perturber_figure.jpeg
-
+.. image:: https://github.com/dangilman/darkspirals/blob/main/perturber_figure.pdf
+        :target: https://github.com/dangilman/darkspirals/blob/main/perturber_figure.pdf
 
 A python package to forward model the formation of phase-space spirals with dark and luminous galactic satellites. 
-
-* Free software: MIT license
-* Documentation: https://darkspirals.readthedocs.io.
-
 
 Features
 --------
@@ -22,7 +17,9 @@ Features
 
 Credits
 -------
+If you use this software for your work, please cite Gilman et al. (2024) 
 
+* Free software: MIT license
 This package was created with Cookiecutter_ and the `audreyr/cookiecutter-pypackage`_ project template.
 
 .. _Cookiecutter: https://github.com/audreyr/cookiecutter
