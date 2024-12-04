@@ -7,9 +7,7 @@ darkspirals
         :target: https://github.com/dangilman/darkspirals/blob/main/perturber_figure.jpeg
 
 
-
-Forward model PS spirals
-
+A python package to forward model the formation of phase-space spirals with dark and luminous galactic satellites. 
 
 * Free software: MIT license
 * Documentation: https://darkspirals.readthedocs.io.
@@ -17,8 +15,10 @@ Forward model PS spirals
 
 Features
 --------
+- generate realistic subhalo populations, including their orbits and masses 
+- flexible parameterization of the Galactic potential, and the potential of the disk in the solar neighborhood 
+- approximate calculation of changes to the vertical action caused by satellite fly-bys  
 
-* TODO
 
 Credits
 -------
