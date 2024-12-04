@@ -4,7 +4,10 @@ from galpy.actionAngle.actionAngleInverse import actionAngleInverse
 from galpy.potential import evaluatelinearPotentials
 
 class DistributionFunctionIsothermal(DistributionFunctionBase):
-
+    """
+    An isothermal distribution function exp(-J * nu / sigma^2), where J is the vertical action, nu is the vertical
+    frequency of the disk and sigma the velocity dispersion
+    """
     def __init__(self, velocity_dispersion, vertical_frequency, action, z_coords, vz_coords, units, fit_midplane=False):
         """
 
@@ -47,22 +50,24 @@ class DistributionFunctionIsothermal(DistributionFunctionBase):
         return df / normalization
 
 class DistributionFunctionLiandWidrow2021(DistributionFunctionBase):
-
+    """
+    The distribution function by Li, Widrow (2021)
+    """
     def __init__(self, velocity_dispersion, vertical_frequency, alpha,
                  action, z_coords, vz_coords, units, fit_midplane=False,
                  solve_Ez=False, vertical_potential=None):
         """
 
-        :param velocity_dispersion:
-        :param vertical_frequency:
-        :param alpha:
-        :param action:
-        :param z_coords: z coordintes in physical units
-        :param vz_coords: vz coordinates in physical units
-        :param units:
-        :param fit_midplane:
-        :param solve_Ez:
-        :param vertical_potential:
+        :param velocity_dispersion: sigma parameter in km/sec
+        :param vertical_frequency: vertical frequency in galpy internal units
+        :param alpha: parameter that alters the slope of velocity dispersion vs. height
+        :param action: the vertical action
+        :param z_coords: z coordinates of phase space in kpc
+        :param vz_coords: vz coordinates of phase space in km/sec
+        :param units: galpy internal units used for the calculations e.g. {'ro': 8.0, 'vo': 220.0}
+        :param fit_midplane: bool; fits for the galactic midplane position when calculating asymmetry
+        :param solve_Ez: solves for the vertical energies exactly, rather than using E_z = J * nu
+        :param vertical_potential: an instance of a galpy vertical potential used to calcualte E_z if solve_Ez=True
         """
         self._velocity_dispersion = velocity_dispersion
         self._vertical_frequency = vertical_frequency

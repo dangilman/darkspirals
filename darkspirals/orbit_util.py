@@ -250,11 +250,17 @@ class OrbitExtension(Orbit):
 
 def integrate_single_orbit(orbit_init, disc, pot,
                            ro=8., vo=220., radec=True, lmc_orbit=None, lmc_potential=None):
-
     """
-    This function integrates an orbit in a potential with initial conditions orbit_init over a time
-    time_Gyr
-
+    Integrate the orbit of a satellite in the Galactic potential
+    :param orbit_init: initialization of the orbit as described in galpy documentation
+    :param disc: an instance of Disc (see darkspirals.disc.py)
+    :param pot: potential of the satellite
+    :param ro: length scale used in galpy's internal units
+    :param vo: velocity scale used in galpy's internal units
+    :param radec: bool; specifies the orbit_init used by galpy, as described in galpy's orbit class documentation
+    :param lmc_orbit: bool; include the effects of the LMC
+    :param lmc_potential: a galpy potential class for the LMC
+    :return: an instance of OrbitExtension that stores the satellite orbit
     """
     satellite_orbit = OrbitExtension(vxvv=orbit_init, radec=radec, ro=ro, vo=vo, pot=pot)
     if lmc_orbit is None:
@@ -267,56 +273,21 @@ def integrate_single_orbit(orbit_init, disc, pot,
     satellite_orbit.turn_physical_off()
     return satellite_orbit
 
-def sample_sag_orbit(scale_uncertainties=1.0):
-    """
-    Generate an orbit for Sagittarius
-    :param scale_uncertainties:
-    :return:
-    """
-    # orbit_init = [280. * apu.deg, -30. * apu.deg, 27. * apu.kpc,
-    #               -2.6 * apu.mas / apu.yr, -1.3 * apu.mas / apu.yr,
-    #               140. * apu.km / apu.s]  # Initial conditions of the satellite
-    alpha_0, delta_0 = 283.8313, -30.5453
-
-    standard_dev = np.sqrt(0.001)
-    d_alpha = np.random.normal(0, standard_dev) * scale_uncertainties
-    d_delta = np.random.normal(0, standard_dev) * scale_uncertainties
-    alpha, delta = alpha_0 + d_alpha, delta_0 + d_delta
-
-    z_0 = 26
-    delta_z = np.random.normal(0, 2.0) * scale_uncertainties
-    z = z_0 + delta_z
-
-    delta_mu_alpha = np.random.normal(0, standard_dev) * scale_uncertainties
-    delta_mu_delta = np.random.normal(0, standard_dev) * scale_uncertainties
-    mu_alpha = -2.692 + delta_mu_alpha
-    mu_delta = -1.359 + delta_mu_delta
-
-    vr_0 = 140
-    delta_vr = np.random.normal(0, 2.) * scale_uncertainties
-    vr = vr_0 + delta_vr
-
-    uncertainties = [d_alpha, d_delta, delta_z, delta_mu_alpha, delta_mu_delta, delta_vr]
-
-    #[283. * apu.deg, -30. * apu.deg, 26. * apu.kpc,
-    # -2.6 * apu.mas / apu.yr, -1.3 * apu.mas / apu.yr, 140. * apu.km / apu.s]
-    orbit_init_sag = [alpha , delta, z,
-                      mu_alpha, mu_delta,
-                      vr ]  # Initial conditions of the satellite
-    return orbit_init_sag, uncertainties
-
 def satellite_vertical_force(disc, satellite_orbit, satellite_potential,
                              z_coord=0.0, record_force_array=False, t_max=None):
     """
     Calculates the force from a passing satellite on the solar neighborhood as a function of time
-    :param disc:
-    :param satellite_orbit:
-    :param satellite_potential:
-    :param record_force_array: bool; if True, then the Orbit instance will aquire a 'force_exerted' attribute for use
+
+    :param disc: an instance of Disc (see darkspirals.disc)
+    :param satellite_orbit: an instance of OrbitExtension
+    :param satellite_potential: an instance of a galpy potential class that corresponds to the perturber
+    :param z_coord: z-coordinates at which to compute the vertical force; z_coord = 0 corresponds to the Galactic
+    midplane. The use of this method in the Disc class passes an array of z-coordinates in phase-space
+    :param record_force_array: bool; if True, then the Orbit instance will receive a 'force_exerted' attribute for use
     in the calculation of perturbations to the full distribution function. This is intended to avoid multiple expensive
      calculations of the same quantity
     :param t_max: the lookback time over which to return the force exerted, should specify a time in the past (<0)
-    :return:
+    :return: The vertical force exerted by the satellite at the specified z-coordinate
     """
     x_solar, y_solar = disc.solar_circle
     t_eval_internal = disc.time_internal_eval

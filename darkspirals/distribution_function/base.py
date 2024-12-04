@@ -7,14 +7,17 @@ import multiprocessing as mp
 
 
 class DistributionFunctionBase(object):
-
+    """
+    Base class for the distribution function. This class contains the methods to compute observables, such as the phase-space
+    distribution itself, the mean vertical velocity, and vertical asymmetry
+    """
     def __init__(self, z_coords, vz_coords, units, fit_midplane):
         """
 
-        :param z_coords: z coordintes in physical units
-        :param vz_coords: vz coordinates in physical units
-        :param units: the internal units used by galpy
-        :param fit_midplane: bool; compute the z-coordinate of the midplane
+        :param z_coords: z coordinates of the phase space in kpc (1D numpy array)
+        :param vz_coords: vertical (z direction) velocity coordinates of the phase space in km/sec
+        :param units: dictionary of the internal units used by galpy, e.g. ({'ro': 8.0, 'vo': 220.0}}
+        :param fit_midplane: bool; fits for the z-coordinate of the midplane
         """
         n = len(z_coords)
         assert len(vz_coords) == n
@@ -31,35 +34,6 @@ class DistributionFunctionBase(object):
         # interp done for physical units
         self.interp_df = RegularGridInterpolator(points_interp, df)
         self.interp_df_normalized = RegularGridInterpolator(points_interp, df / np.max(df))
-
-    def _eval(self, points, disc):
-        """
-        Evaluates Disc class action/angle variables with multi-threading
-        :return:
-        """
-        out = disc.action_angle_interp(points)
-        w = np.squeeze(self.interp_df_normalized(points))
-        return np.column_stack((out, w))
-
-    def _sample_single_cpu(self, N_samples):
-        """
-        Sample from the distribution function on a single cpu core
-        :param N_samples: number of samples to draw
-        :return: samples from the df in physical units
-        """
-        z = []
-        vz = []
-        while True:
-            _z = np.random.uniform(min(self._z), max(self._z)) * self._units['ro']
-            _vz = np.random.uniform(min(self._v), max(self._v)) * self._units['vo']
-            p = float(self.interp_df_normalized((_z, _vz)))
-            u = np.random.rand()
-            if p > u:
-                z.append(_z)
-                vz.append(_vz)
-            if len(z) == N_samples:
-                break
-        return [np.array(z), np.array(vz)]
 
     def sample(self, N_samples=1000, n_cpu=10):
         """
@@ -89,8 +63,15 @@ class DistributionFunctionBase(object):
 
     def sample_action_angle_freq(self, disc, N_samples=10000, physical_output=False, z_max=None, vz_max=None):
         """
-        Sample (J(z, vz), theta(z, vz)) weighted by df(z, vz)
-        :return:
+        Sample (action, angle, frequency) uniformly across the phase space, and return these values along with the
+        corresponding weights from the distribution function
+
+        :param disc: an instance of Disc class
+        :param N_samples: number of samples to draw from the df
+        :param physical_output: bool; if True, returns quantities in physical (i.e. not galpy internal) units
+        :param z_max: maximum |z| value from which to sample in kpc
+        :param vz_max: maximum |v_z| value from which to sample in km/sec
+        :return: Actions, angles, frequencies, and weights calculated from the distribution function
         """
         N_samples = int(N_samples)
         zmin_max = float(np.max(np.absolute(self._z * self._units['ro'])))
@@ -124,7 +105,7 @@ class DistributionFunctionBase(object):
 
     def update_params(self, *args, **kwargs):
         """
-        Changes the parameters describing the distribution function, this is model-specific so it should be defined
+        Changes the parameters describing the distribution function, this is model-specific, so it should be defined
         separately for each distribution function class
         :return:
         """
@@ -206,9 +187,11 @@ class DistributionFunctionBase(object):
 
     def mean_vertical_velocity(self, z=None, subtract_mean=False):
         """
-
-        :param z:
-        :return:
+        Calculate the mean vertical velocity
+        :param subtract_mean: bool; if True, computes this statistic such that the mean = 0. If False, computes the
+        statistic relative to an observer at z=0
+        :param z: vertical heights at which to calculate the statistic; defaults to z_coords used to instantiate the class
+        :return: z, and <v_z> in kpc and km/sec
         """
         domain = self._z * self._units['ro']
         vz_mean = self.mean_v_relative
@@ -236,8 +219,9 @@ class DistributionFunctionBase(object):
 
     def vertical_asymmetry(self, z=None):
         """
-        Calculate the vertical asymmetry
-        :return:
+        Calculate the vertical number count asymmetry
+        :param z: z coordinates in kpc at which to evaluate A(z)
+        :return: z coordinates and A(z)
         """
         kwargs_interp = {'fill_value': 'extrapolate', 'kind': 'cubic'}
         func = interp1d(self._z - self._z_midplane, np.log(self.density), **kwargs_interp)
@@ -284,16 +268,6 @@ class DistributionFunctionBase(object):
         return self._moment(0.0)
 
     @property
-    def _interpolated_density(self):
-        """
-        Calculate a spline interpolation of the density
-        :return: function that returns density given a height z in internal units
-        """
-        if not hasattr(self, '_rho_interp'):
-            self._rho_interp = interp1d(self._z, self.density, fill_value='extrapolate')
-        return self._rho_interp
-
-    @property
     def mean_v(self):
         """
         calculate the mean vertical velocity, <v_z>, as a function of height in km/sec
@@ -320,6 +294,35 @@ class DistributionFunctionBase(object):
         v2 = self._moment(2) / self._moment(0) - (self._moment(1) / self._moment(0)) ** 2
         return np.sqrt(v2) * self._units['vo']
 
+    def _eval(self, points, disc):
+        """
+        Evaluate Disc class action/angle variables with multi-threading
+        :return:
+        """
+        out = disc.action_angle_interp(points)
+        w = np.squeeze(self.interp_df_normalized(points))
+        return np.column_stack((out, w))
+
+    def _sample_single_cpu(self, N_samples):
+        """
+        Sample from the distribution function on a single cpu core
+        :param N_samples: number of samples to draw
+        :return: samples from the df in physical units
+        """
+        z = []
+        vz = []
+        while True:
+            _z = np.random.uniform(min(self._z), max(self._z)) * self._units['ro']
+            _vz = np.random.uniform(min(self._v), max(self._v)) * self._units['vo']
+            p = float(self.interp_df_normalized((_z, _vz)))
+            u = np.random.rand()
+            if p > u:
+                z.append(_z)
+                vz.append(_vz)
+            if len(z) == N_samples:
+                break
+        return [np.array(z), np.array(vz)]
+
     def _moment(self, n):
         """
         Calculates the n-th moment of the distribution function along the second axis; when the phase space is specified
@@ -329,3 +332,13 @@ class DistributionFunctionBase(object):
         """
         v_array = self._v[None, :] ** n
         return simps(self.function * v_array, self._v, axis=1)
+
+    @property
+    def _interpolated_density(self):
+        """
+        Calculate a spline interpolation of the density
+        :return: function that returns density given a height z in internal units
+        """
+        if not hasattr(self, '_rho_interp'):
+            self._rho_interp = interp1d(self._z, self.density, fill_value='extrapolate')
+        return self._rho_interp

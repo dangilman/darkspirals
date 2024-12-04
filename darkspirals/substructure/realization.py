@@ -49,44 +49,81 @@ class SubstructureRealization(object):
                                 np.append(realization1.subhalo_masses, realization2.subhalo_masses),
                                 dwarf_galaxies_added=False)
 
-    @property
-    def dwarf_galaxy_names(self):
-        if self._dwarf_galaxies_added:
-            return self._dwarf_galaxy_names
-        else:
-            raise Exception('population of dwarf galaxies not yet specified for the class')
+    @classmethod
+    def withDistanceCut(cls, disc, r_min, num_halos_scale=1.0,
+                        norm=1200.0, alpha=-1.9, m_high=10 ** 8, m_low=10 ** 6,
+                        num_halos=None, t_max=None, model_disc_disruption=False, verbose=False):
+        """
 
-    @property
-    def dwarf_galaxy_masses(self):
-        return self._dwarf_galaxy_masses
+        :param disc: an instance of the Disc class
+        :param r_min: the minimum distance a subhalo comes from the galactic center
+        :param num_halos_scale: linearly scales the number of halos, the same as increaing the normlaization
+        :param norm: sets the overall normalization of the differential subhalo mass function
+        :param alpha: the logarithmic slope of the differential subhalo mass function
+        :param m_high: the upper mass limit for subhalos
+        :param m_low: the lower mass limit for subhalos
+        :param num_halos: number of halos to generate, overrides calculation based on norm parameter
+        :param t_max: ignore perturbation by subhalos with impact times greater than this; should be a negative number
+        specifying a time in the past in Gyr
+        :param model_disc_disruption: bool; if True, will discard subhalos if they cross the disk midplane before their
+        impact time
+        :return: an instance of Realization that includes subhalos
+        """
+        _subhalo_masses = sample_mass_function(num_halos_scale * norm,
+                                               alpha,
+                                               m_high,
+                                               m_low,
+                                               num_halos)
+        num_halos = len(_subhalo_masses)
+        kde = gaussian_kde(galacticus_output.T)
+        _, _, x, y, z, vx, vy, vz = kde.resample(num_halos)
+        potentials = []
+        orbits = []
+        subhalo_masses = []
+        for counter, (x_i, y_i, z_i, vx_i, vy_i, vz_i, m) in enumerate(zip(x, y, z, vx, vy, vz, _subhalo_masses)):
+            vR, vT, vz = rect_to_cyl_vec(vx_i, vy_i, vz_i, x_i, y_i, z_i)
+            R, phi, z = rect_to_cyl(x_i, y_i, z_i)
+            vxvv = [R * apu.kpc,
+                    vR * apu.km / apu.s,
+                    vT * apu.km / apu.s,
+                    z_i * apu.kpc,
+                    vz_i * apu.km / apu.s,
+                    phi * 180 / np.pi * apu.deg]
+            c = sample_concentration_nfw(m)
+            pot = NFWPotential(mvir=m / 10 ** 12, conc=c)
+            orb = integrate_single_orbit(vxvv,
+                                         disc,
+                                         pot=pot,
+                                         radec=False)
+            impact_distance, impact_time = orb.orbit_parameters(disc, t_max)
+            if model_disc_disruption:
+                crossing_times = orb.disc_crossing_times(disc)
+                num_crossing = len(crossing_times)
+                if num_crossing > 0:
+                    t_cross = abs(crossing_times[-1])
+                    if t_cross > impact_time + 0.2:
+                        disrupted = True
+                    else:
+                        disrupted = False
+                else:
+                    disrupted = False
+            else:
+                disrupted = False
+            if t_max is None:
+                t_max = -10000
+            if r_min is None:
+                r_min = 1e9
+            if impact_distance <= r_min and abs(impact_time) <= abs(t_max):
+                if disrupted is False:
+                    orbits.append(orb)
+                    potentials.append(pot)
+                    subhalo_masses.append(m)
+                    orb.set_closest_approach(impact_distance, impact_time)
+            if verbose and counter % 25 == 0:
+                percent_done = int(100 * counter / len(_subhalo_masses))
+                print('completed ' + str(percent_done) + '% of force calculations... ')
+        return SubstructureRealization(disc, orbits, potentials, np.array(subhalo_masses))
 
-    @property
-    def subhalo_masses(self):
-        return np.array(self._subhalo_masses)
-
-    @property
-    def orbits(self):
-        return self._subhalo_orbits + self._dwarf_galaxy_orbits
-
-    @property
-    def potentials(self):
-        return self._subhalo_potentials + self._dwarf_galaxy_potentials
-
-    @property
-    def subhalo_orbits(self):
-        return self._subhalo_orbits
-
-    @property
-    def subhalo_potentials(self):
-        return self._subhalo_potentials
-
-    @property
-    def dwarf_galaxy_orbits(self):
-        return self._dwarf_galaxy_orbits
-
-    @property
-    def dwarf_galaxy_potentials(self):
-        return self._dwarf_galaxy_potentials
 
     def add_dwarf_galaxies(self, add_orbit_uncertainties=True,
                            additional_orbits=None, additional_mpeak=None, LMC_effect=False,
@@ -166,86 +203,66 @@ class SubstructureRealization(object):
         self._dwarf_galaxies_added = True
         return
 
-    @classmethod
-    def withDistanceCut(cls, disc, r_min, num_halos_scale=1.0,
-                        norm=1200.0, alpha=-1.9, m_high=10**8, m_low=10**6,
-                        num_halos=None, t_max=None, model_disc_disruption=False, verbose=False):
-        """
+    @property
+    def dwarf_galaxy_names(self):
+        if self._dwarf_galaxies_added:
+            return self._dwarf_galaxy_names
+        else:
+            raise Exception('population of dwarf galaxies not yet specified for the class')
 
-        :param disc: an instance of the Disc class
-        :param r_min: the minimum distance a subhalo comes from the galactic center
-        :param num_halos_scale: linearly scales the number of halos, the same as increaing the normlaization
-        :param norm: the normalization of the SHMF; this parameter is chosen by sampling orbits from the kde, integrating them,
-        and then selecting objects that pass within 40 kpc of the solar position. Galacticus predicts ~ 370 objects that pass within
-        40 kpc of the galactic center with mass between 10^6.7 and 10^9. Setting norm = 1000 reproduces this number of objects from the method used to sample orbits
-        :param alpha: the logarithmic slope of the differential subhalo mass function
-        :param m_high: the upper mass limit for subhalos
-        :param m_low: the lower mass limit for subhalos
-        :param num_halos: number of halos to generate, overrides calculation based on norm parameter
-        :param t_max: discard subhalos with impact times greater than this
-        :param model_disc_disruption: bool; if True, will discard subhalos if they cross the disk midplane before their
-        impact time
-        :return: an instance of Realization that includes subhalos
-        """
-        _subhalo_masses = sample_mass_function(num_halos_scale * norm,
-                                              alpha,
-                                              m_high,
-                                              m_low,
-                                              num_halos)
-        num_halos = len(_subhalo_masses)
-        kde = gaussian_kde(galacticus_output.T)
-        _, _, x, y, z, vx, vy, vz = kde.resample(num_halos)
-        potentials = []
-        orbits = []
-        subhalo_masses = []
-        for counter, (x_i, y_i, z_i, vx_i, vy_i, vz_i, m) in enumerate(zip(x, y, z, vx, vy, vz, _subhalo_masses)):
-            vR, vT, vz = rect_to_cyl_vec(vx_i, vy_i, vz_i, x_i, y_i, z_i)
-            R, phi, z = rect_to_cyl(x_i, y_i, z_i)
-            vxvv = [R * apu.kpc,
-                    vR * apu.km/apu.s,
-                    vT * apu.km/apu.s,
-                    z_i * apu.kpc,
-                    vz_i * apu.km/apu.s,
-                    phi * 180/np.pi * apu.deg]
-            c = sample_concentration_nfw(m)
-            pot = NFWPotential(mvir=m / 10 ** 12, conc=c)
-            orb = integrate_single_orbit(vxvv,
-                                         disc,
-                                         pot=pot,
-                                         radec=False)
-            impact_distance, impact_time = orb.orbit_parameters(disc, t_max)
-            if model_disc_disruption:
-                crossing_times = orb.disc_crossing_times(disc)
-                num_crossing = len(crossing_times)
-                if num_crossing > 0:
-                    t_cross = abs(crossing_times[-1])
-                    if t_cross > impact_time + 0.2:
-                        disrupted = True
-                    else:
-                        disrupted = False
-                else:
-                    disrupted = False
-            else:
-                disrupted = False
-            if t_max is None:
-                t_max = -10000
-            if r_min is None:
-                r_min = 1e9
-            if impact_distance <= r_min and abs(impact_time) <= abs(t_max):
-                if disrupted is False:
-                    orbits.append(orb)
-                    potentials.append(pot)
-                    subhalo_masses.append(m)
-                    orb.set_closest_approach(impact_distance, impact_time)
-            if verbose and counter%25==0:
-                percent_done = int(100*counter/len(_subhalo_masses))
-                print('completed '+str(percent_done)+'% of force calculations... ')
-        return SubstructureRealization(disc, orbits, potentials, np.array(subhalo_masses))
+    @property
+    def dwarf_galaxy_masses(self):
+        return self._dwarf_galaxy_masses
+
+    @property
+    def subhalo_masses(self):
+        return np.array(self._subhalo_masses)
+
+    @property
+    def orbits(self):
+        return self._subhalo_orbits + self._dwarf_galaxy_orbits
+
+    @property
+    def potentials(self):
+        return self._subhalo_potentials + self._dwarf_galaxy_potentials
+
+    @property
+    def subhalo_orbits(self):
+        return self._subhalo_orbits
+
+    @property
+    def subhalo_potentials(self):
+        return self._subhalo_potentials
+
+    @property
+    def dwarf_galaxy_orbits(self):
+        return self._dwarf_galaxy_orbits
+
+    @property
+    def dwarf_galaxy_potentials(self):
+        return self._dwarf_galaxy_potentials
+
 
     def plot(self, grid_size=14, co_rotating_frame=False,
              subhalo_orbit_color='k', solar_circle_color='0.6', subhalo_alpha=0.5, lw_norm=4.0, lw_exp=1.0,
              axis_size=40, fig_size=8, ax=None, fig=None, label_impact_location=False, solar_circle_lw=2.5):
-
+        """
+        Makes a plot of the realization
+        :param grid_size:
+        :param co_rotating_frame:
+        :param subhalo_orbit_color:
+        :param solar_circle_color:
+        :param subhalo_alpha:
+        :param lw_norm:
+        :param lw_exp:
+        :param axis_size:
+        :param fig_size:
+        :param ax:
+        :param fig:
+        :param label_impact_location:
+        :param solar_circle_lw:
+        :return:
+        """
         if fig is None:
             fig = plt.figure(1)
             fig.set_size_inches(fig_size, fig_size)
