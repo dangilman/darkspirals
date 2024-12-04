@@ -66,6 +66,21 @@ class OrbitExtension(Orbit):
         v = (vx - vxref, vy - vyref, vz - vzref)
         return x, v
 
+    def disc_crossing_times(self, disc):
+        """
+        Compute the time or times when the subhalo cross the galactic disk (z=0)
+        :param disc: an instance of Disc
+        :return: a list of times in the past in Gyr when a subhalo crosses z=0
+        """
+        t = disc.time_internal_eval
+        z = np.squeeze(self.z(t))
+        index_cross = np.where(np.sign(z[:-1]) != np.sign(z[1:]))[0]
+        if len(index_cross) == 0:
+            return []
+        else:
+            crossing_times = np.array(t[index_cross])
+            return disc.internal_time_to_time(crossing_times)
+
     def orbit_parameters(self, disc, t_max=None):
         """
         Calculate the distance from the solar neighborhood at the time when a satellite exerts the largest force on the

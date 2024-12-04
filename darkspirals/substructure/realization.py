@@ -169,7 +169,7 @@ class SubstructureRealization(object):
     @classmethod
     def withDistanceCut(cls, disc, r_min, num_halos_scale=1.0,
                         norm=1200.0, alpha=-1.9, m_high=10**8, m_low=10**6,
-                        num_halos=None, t_max=None, verbose=False):
+                        num_halos=None, t_max=None, model_disc_disruption=False, verbose=False):
         """
 
         :param disc: an instance of the Disc class
@@ -183,6 +183,8 @@ class SubstructureRealization(object):
         :param m_low: the lower mass limit for subhalos
         :param num_halos: number of halos to generate, overrides calculation based on norm parameter
         :param t_max: discard subhalos with impact times greater than this
+        :param model_disc_disruption: bool; if True, will discard subhalos if they cross the disk midplane before their
+        impact time
         :return: an instance of Realization that includes subhalos
         """
         _subhalo_masses = sample_mass_function(num_halos_scale * norm,
@@ -212,18 +214,29 @@ class SubstructureRealization(object):
                                          pot=pot,
                                          radec=False)
             impact_distance, impact_time = orb.orbit_parameters(disc, t_max)
+            if model_disc_disruption:
+                crossing_times = orb.disc_crossing_times(disc)
+                num_crossing = len(crossing_times)
+                if num_crossing > 0:
+                    t_cross = abs(crossing_times[-1])
+                    if t_cross > impact_time + 0.2:
+                        disrupted = True
+                    else:
+                        disrupted = False
+                else:
+                    disrupted = False
+            else:
+                disrupted = False
             if t_max is None:
                 t_max = -10000
-            if r_min is None and t_max is None:
-                orbits.append(orb)
-                potentials.append(pot)
-                subhalo_masses.append(m)
-                orb.set_closest_approach(impact_distance, impact_time)
-            elif impact_distance <= r_min and abs(impact_time) <= abs(t_max):
-                orbits.append(orb)
-                potentials.append(pot)
-                subhalo_masses.append(m)
-                orb.set_closest_approach(impact_distance, impact_time)
+            if r_min is None:
+                r_min = 1e9
+            if impact_distance <= r_min and abs(impact_time) <= abs(t_max):
+                if disrupted is False:
+                    orbits.append(orb)
+                    potentials.append(pot)
+                    subhalo_masses.append(m)
+                    orb.set_closest_approach(impact_distance, impact_time)
             if verbose and counter%25==0:
                 percent_done = int(100*counter/len(_subhalo_masses))
                 print('completed '+str(percent_done)+'% of force calculations... ')
