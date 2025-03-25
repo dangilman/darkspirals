@@ -102,7 +102,6 @@ class SubstructureRealization(object):
             if density_profile == 'NFW':
                 pot = NFWPotential(mvir=m / 10 ** 12, conc=c)
             elif density_profile == 'TWOPOWER':
-                amp = m / mass_twopower(rmax, 1.0, rs, alpha_profile, beta_profile)
                 z_eval_rho_crit = 0
                 rho_crit = un.Quantity(self.cosmo.astropy.critical_density(z_eval_rho_crit),
                                        unit=un.Msun / un.kpc ** 3).value
@@ -110,6 +109,7 @@ class SubstructureRealization(object):
                 r200 = r200_h / cosmo.h
                 rs = r200/c
                 a = float(rs / self._disc.units['ro'])
+                amp = m / mass_twopower(r200, 1.0, rs, alpha_profile, beta_profile)
                 pot = TwoPowerSphericalPotential(amp, a)
             else:
                 raise Exception('density profile must be etiher NFW or GNFW')
