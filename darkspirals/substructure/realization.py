@@ -108,7 +108,7 @@ class SubstructureRealization(object):
                 r200_h = (3 * m * cosmo.h / (4 * np.pi * rho_crit * 200)) ** (1.0 / 3.0)
                 r200 = r200_h / cosmo.h
                 rs = r200/c
-                a = float(rs / self._disc.units['ro'])
+                a = float(rs / disc.units['ro'])
                 amp = m / mass_twopower(r200, 1.0, rs, alpha_profile, beta_profile)
                 pot = TwoPowerSphericalPotential(amp, a)
             else:
