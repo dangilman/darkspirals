@@ -3,11 +3,14 @@ from scipy.stats.kde import gaussian_kde
 from darkspirals.substructure.galacticus_subhalo_data import galacticus_output
 from galpy.util.coords import rect_to_cyl, rect_to_cyl_vec
 from darkspirals.orbit_util import integrate_single_orbit
-from galpy.potential import NFWPotential
+from galpy.potential import NFWPotential, TwoPowerSphericalPotential
 from darkspirals.substructure.halo_util import sample_concentration_nfw, sample_mass_function
 import astropy.units as apu
 import matplotlib.pyplot as plt
 from darkspirals.substructure.dsphr import PopulationdSphr
+from darkspirals.substructure.halo_util import mass_twopower
+from astropy.cosmology import FlatLambdaCDM
+import astropy.units as un
 
 class SubstructureRealization(object):
     """
@@ -34,6 +37,7 @@ class SubstructureRealization(object):
         self._dwarf_galaxy_masses = []
         self.pop_dsphr = None
         self._dwarf_galaxies_added = dwarf_galaxies_added
+        self._cosmo = FlatLambdaCDM(H0=70, Om0=0.3)
 
     @classmethod
     def join(cls, realization1, realization2):
@@ -52,7 +56,8 @@ class SubstructureRealization(object):
     @classmethod
     def withDistanceCut(cls, disc, r_min, num_halos_scale=1.0,
                         norm=1200.0, alpha=-1.9, m_high=10 ** 8, m_low=10 ** 6,
-                        num_halos=None, t_max=None, model_disc_disruption=False, verbose=False):
+                        num_halos=None, t_max=None, model_disc_disruption=False,
+                        density_profile='NFW', alpha_profile=None, beta_profile=None, verbose=False):
         """
 
         :param disc: an instance of the Disc class
@@ -67,8 +72,12 @@ class SubstructureRealization(object):
         specifying a time in the past in Gyr
         :param model_disc_disruption: bool; if True, will discard subhalos if they cross the disk midplane before their
         impact time
+        :param density_profile: halo density profile model
+        :param alpha: the inner slope of the halo density profile when using TWOPOWER density profile
+        :param beta: the outer slope of the halo density profile when using TWOPOWER density profile
         :return: an instance of Realization that includes subhalos
         """
+        cosmo = FlatLambdaCDM(H0=70, Om0=0.3)
         _subhalo_masses = sample_mass_function(num_halos_scale * norm,
                                                alpha,
                                                m_high,
@@ -90,7 +99,20 @@ class SubstructureRealization(object):
                     vz_i * apu.km / apu.s,
                     phi * 180 / np.pi * apu.deg]
             c = sample_concentration_nfw(m)
-            pot = NFWPotential(mvir=m / 10 ** 12, conc=c)
+            if density_profile == 'NFW':
+                pot = NFWPotential(mvir=m / 10 ** 12, conc=c)
+            elif density_profile == 'TWOPOWER':
+                amp = m / mass_twopower(rmax, 1.0, rs, alpha_profile, beta_profile)
+                z_eval_rho_crit = 0
+                rho_crit = un.Quantity(self.cosmo.astropy.critical_density(z_eval_rho_crit),
+                                       unit=un.Msun / un.kpc ** 3).value
+                r200_h = (3 * m * cosmo.h / (4 * np.pi * rho_crit * 200)) ** (1.0 / 3.0)
+                r200 = r200_h / cosmo.h
+                rs = r200/c
+                a = float(rs / self._disc.units['ro'])
+                pot = TwoPowerSphericalPotential(amp, a)
+            else:
+                raise Exception('density profile must be etiher NFW or GNFW')
             orb = integrate_single_orbit(vxvv,
                                          disc,
                                          pot=pot,
@@ -148,7 +170,6 @@ class SubstructureRealization(object):
         :param stripping_factor: see above
         :param include_dwarf_list: a list of dwarf galaxies to include, overrides the default list in PopulationdSphr
         """
-
         pop_dsphr = PopulationdSphr()
         self.pop_dsphr = pop_dsphr
         dwarf_potentials = []
@@ -337,3 +358,4 @@ class SubstructureRealization(object):
                     color=solar_circle_color, label='solar circle', lw=solar_circle_lw, linestyle='-')
 
         return ax
+

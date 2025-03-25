@@ -69,3 +69,16 @@ def sample_mass_function(norm, alpha, mH, mL, num_halos=None):
         1 + alpha)) ** (
             (1 + alpha) ** -1)
     return np.array(X)
+
+def rho_twopower(r, M0, rs, alpha, beta):
+    norm = M0 / (4*np.pi*rs**3)
+    p1 = alpha
+    p2 = beta - alpha
+    x = r/rs
+    denom = x ** p1 * (1+x)**p2
+    return norm / denom
+
+def mass_twopower(rmax, M0, rs, alpha, beta, x_min=1e-3, num=2000):
+    r = np.linspace(x_min * rs, rmax, num)
+    rho = rho_twopower(r, M0, rs, alpha, beta)
+    return np.trapz(4*np.pi*r**2 * rho, r)
