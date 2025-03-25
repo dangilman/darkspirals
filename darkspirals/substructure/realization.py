@@ -12,6 +12,7 @@ from darkspirals.substructure.halo_util import mass_twopower
 from astropy.cosmology import FlatLambdaCDM
 import astropy.units as un
 
+
 class SubstructureRealization(object):
     """
     This class is used to create and store the orbits of perturbers, both luminous and dark satellites.
@@ -108,9 +109,8 @@ class SubstructureRealization(object):
                 r200_h = (3 * m * cosmo.h / (4 * np.pi * rho_crit * 200)) ** (1.0 / 3.0)
                 r200 = r200_h / cosmo.h
                 rs = r200/c
-                a = float(rs / disc.units['ro'])
                 amp = m / mass_twopower(r200, 1.0, rs, alpha_profile, beta_profile)
-                pot = TwoPowerSphericalPotential(amp, a)
+                pot = TwoPowerSphericalPotential(amp * un.Msun, rs * un.kpc)
             else:
                 raise Exception('density profile must be etiher NFW or GNFW')
             orb = integrate_single_orbit(vxvv,
