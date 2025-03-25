@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from darkspirals.substructure.dsphr import PopulationdSphr
 from darkspirals.substructure.halo_util import mass_twopower
 from astropy.cosmology import FlatLambdaCDM
+from galpy.potential import mass as mass_galpy
 import astropy.units as un
 
 
@@ -109,8 +110,10 @@ class SubstructureRealization(object):
                 r200_h = (3 * m * cosmo.h / (4 * np.pi * rho_crit * 200)) ** (1.0 / 3.0)
                 r200 = r200_h / cosmo.h
                 rs = r200/c
-                amp = m / mass_twopower(r200, 1.0, rs, alpha_profile, beta_profile)
-                pot = TwoPowerSphericalPotential(amp * un.Msun, rs * un.kpc)
+                _pot = TwoPowerSphericalPotential(1.0 * un.solMass, rs * un.kpc)
+                _mass = mass_galpy(_pot, R=r200 / disc.units['ro'])
+                amp = m / _mass
+                pot = TwoPowerSphericalPotential(amp * un.solMass, rs * un.kpc)
             else:
                 raise Exception('density profile must be etiher NFW or GNFW')
             orb = integrate_single_orbit(vxvv,
