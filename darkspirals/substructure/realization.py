@@ -103,7 +103,7 @@ class SubstructureRealization(object):
                 pot = NFWPotential(mvir=m / 10 ** 12, conc=c)
             elif density_profile == 'TWOPOWER':
                 z_eval_rho_crit = 0
-                rho_crit = un.Quantity(cosmo.astropy.critical_density(z_eval_rho_crit),
+                rho_crit = un.Quantity(cosmo.critical_density(z_eval_rho_crit),
                                        unit=un.Msun / un.kpc ** 3).value
                 r200_h = (3 * m * cosmo.h / (4 * np.pi * rho_crit * 200)) ** (1.0 / 3.0)
                 r200 = r200_h / cosmo.h
