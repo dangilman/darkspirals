@@ -104,16 +104,22 @@ class SubstructureRealization(object):
             if density_profile == 'NFW':
                 pot = NFWPotential(mvir=m / 10 ** 12, conc=c)
             elif density_profile == 'TWOPOWER':
-                z_eval_rho_crit = 0
+                z_eval_rho_crit = 0  # evaluate rho_crit at z=0 for now
                 rho_crit = un.Quantity(cosmo.critical_density(z_eval_rho_crit),
                                        unit=un.Msun / un.kpc ** 3).value
-                r200_h = (3 * m * cosmo.h / (4 * np.pi * rho_crit * 200)) ** (1.0 / 3.0)
-                r200 = r200_h / cosmo.h
-                rs = r200/c
-                _pot = TwoPowerSphericalPotential(1.0 * un.solMass, rs * un.kpc)
-                _mass = mass_galpy(_pot, R=r200 / disc.units['ro'])
+                r200 = (3 * m / (4 * np.pi * rho_crit * 200)) ** (1.0 / 3.0)
+                rs = r200 / c
+                _pot = TwoPowerSphericalPotential(1.0 * un.solMass,
+                                                  a=rs * un.kpc,
+                                                  alpha=alpha_profile,
+                                                  beta=beta_profile)
+                _mass = mass_galpy(_pot,
+                                   R=r200 * un.kpc)
                 amp = m / _mass
-                pot = TwoPowerSphericalPotential(amp * un.solMass, rs * un.kpc)
+                pot = TwoPowerSphericalPotential(amp * un.solMass,
+                                                 a=rs * un.kpc,
+                                                 alpha=alpha_profile,
+                                                 beta=beta_profile)
             else:
                 raise Exception('density profile must be etiher NFW or GNFW')
             orb = integrate_single_orbit(vxvv,
