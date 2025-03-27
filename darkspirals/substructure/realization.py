@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.stats.kde import gaussian_kde
-from darkspirals.substructure.galacticus_subhalo_data import galacticus_output
+from darkspirals.substructure.galacticus_subhalo_data import galacticus_output as galacticus_output_mdisk10
+from darkspirals.substructure.galacticus_subhalo_data import galacticus_output as galacticus_output_mdisk6810
 from galpy.util.coords import rect_to_cyl, rect_to_cyl_vec
 from darkspirals.orbit_util import integrate_single_orbit
 from galpy.potential import NFWPotential, TwoPowerSphericalPotential
@@ -59,7 +60,8 @@ class SubstructureRealization(object):
     def withDistanceCut(cls, disc, r_min, num_halos_scale=1.0,
                         norm=1200.0, alpha=-1.9, m_high=10 ** 8, m_low=10 ** 6,
                         num_halos=None, t_max=None, model_disc_disruption=False,
-                        density_profile='NFW', alpha_profile=None, beta_profile=None, verbose=False):
+                        density_profile='NFW', alpha_profile=None, beta_profile=None,
+                        disk_mass_model='MDISK_10', verbose=False):
         """
 
         :param disc: an instance of the Disc class
@@ -86,7 +88,12 @@ class SubstructureRealization(object):
                                                m_low,
                                                num_halos)
         num_halos = len(_subhalo_masses)
-        kde = gaussian_kde(galacticus_output.T)
+        if disk_mass_model == 'MDISK_10':
+            kde = gaussian_kde(galacticus_output_mdisk10.T)
+        elif disk_mass_model == 'MDISK_6810':
+            kde = gaussian_kde(galacticus_output_mdisk6810.T)
+        else:
+            raise Exception('unknown disk mass model '+str(disk_mass_model))
         _, _, x, y, z, vx, vy, vz = kde.resample(num_halos)
         potentials = []
         orbits = []
