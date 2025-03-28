@@ -61,7 +61,7 @@ class SubstructureRealization(object):
                         norm=1200.0, alpha=-1.9, m_high=10 ** 8, m_low=10 ** 6,
                         num_halos=None, t_max=None, model_disc_disruption=False,
                         density_profile='NFW', alpha_profile=None, beta_profile=None,
-                        disk_mass_model='MDISK_10', verbose=False):
+                        disk_mass_model='MDISK_6810', verbose=False):
         """
 
         :param disc: an instance of the Disc class

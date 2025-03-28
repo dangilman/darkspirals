@@ -2,6 +2,7 @@ import numpy as np
 
 # number of realizations: 6
 # columns reflect data at t=0: log10(bound_mass), log10(infall_mass), x, y, z, vx, vy, vz in kpc and km/sec
+# the mass of the disk at z=0 is 6.8 * 10^10
 
 galacticus_output = np.array([[ 6.95544007e+00,  6.95544007e+00, -5.45739035e+02,
          1.21477500e+03,  3.87278395e+02, -4.85619381e+01,
