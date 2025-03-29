@@ -122,7 +122,16 @@ class SubstructureRealization(object):
             c = sample_concentration_nfw(m)
             if density_profile == 'NFW':
                 if redshift_eval == 'INFALL':
-                    pot = NFWPotential(mvir=m / 10 ** 12, conc=c, cosmo=cosmo, z_eval=z_inf)
+                    rho_crit = un.Quantity(cosmo.critical_density(z_inf),
+                                           unit=un.Msun / un.kpc ** 3).value
+                    r200 = (3 * m / (4 * np.pi * rho_crit * 200)) ** (1.0 / 3.0)
+                    rs = r200 / c
+                    # amp = 4 * pi * rs^3 * rho_s
+                    # m = 4 * pi * rs^3 * rho_s * (log(1+c) - c/(1+c))
+                    #   = amp * (log(1+c) - c/(1+c))
+                    # amp = m / (log(1+c) - c/(1+c))
+                    amp = m / (np.log(1+c) - c/(1+c))
+                    pot = NFWPotential(amp=amp * un.solMass, a=rs * un.kpc)
                 else:
                     pot = NFWPotential(mvir=m / 10 ** 12, conc=c)
             elif density_profile == 'TWOPOWER':
