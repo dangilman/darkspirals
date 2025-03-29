@@ -1,7 +1,8 @@
 import numpy as np
 from scipy.stats.kde import gaussian_kde
 from darkspirals.substructure.galacticus_subhalo_data import galacticus_output as galacticus_output_mdisk10
-from darkspirals.substructure.galacticus_subhalo_data import galacticus_output as galacticus_output_mdisk6810
+from darkspirals.substructure.galacticus_subhalo_data_mdisk6810 import galacticus_output as galacticus_output_mdisk6810
+from darkspirals.substructure.galacticus_subhalo_data_mdisk6810 import infall_redshift_samples
 from galpy.util.coords import rect_to_cyl, rect_to_cyl_vec
 from darkspirals.orbit_util import integrate_single_orbit
 from galpy.potential import NFWPotential, TwoPowerSphericalPotential
@@ -12,6 +13,7 @@ from darkspirals.substructure.dsphr import PopulationdSphr
 from darkspirals.substructure.halo_util import mass_twopower
 from astropy.cosmology import FlatLambdaCDM
 from galpy.potential import mass as mass_galpy
+from scipy.interpolate import interp1d
 import astropy.units as un
 
 
@@ -61,7 +63,7 @@ class SubstructureRealization(object):
                         norm=1200.0, alpha=-1.9, m_high=10 ** 8, m_low=10 ** 6,
                         num_halos=None, t_max=None, model_disc_disruption=False,
                         density_profile='NFW', alpha_profile=None, beta_profile=None,
-                        disk_mass_model='MDISK_6810', verbose=False):
+                        disk_mass_model='MDISK_6810', redshift_eval='INFALL', verbose=False):
         """
 
         :param disc: an instance of the Disc class
@@ -79,6 +81,10 @@ class SubstructureRealization(object):
         :param density_profile: halo density profile model
         :param alpha: the inner slope of the halo density profile when using TWOPOWER density profile
         :param beta: the outer slope of the halo density profile when using TWOPOWER density profile
+        :param disk_mass_model: stellar disk mass model used to create orbit KDE; can be MDISK_10 or MDISK_6810 for
+        disk masses of 10^10 and 6.8e10, respectively
+        :param redshift_eval: redshift at which to evaluate rho_crit for subhalo density profile; options are 'INFALL'
+        for the infall redshift estimated from Galacticus, or a single number corresponding to the redshift
         :return: an instance of Realization that includes subhalos
         """
         cosmo = FlatLambdaCDM(H0=70, Om0=0.3)
@@ -88,6 +94,10 @@ class SubstructureRealization(object):
                                                m_low,
                                                num_halos)
         num_halos = len(_subhalo_masses)
+        h, z_infall = np.histogram(infall_redshift_samples, range=(0, 12), bins=40)
+        z_infall_cdf = np.cumsum(h)
+        z_infall_cdf = z_infall_cdf / z_infall_cdf[-1]
+        invert_z_infall_cdf = interp1d(z_infall_cdf, z_infall[0:-1])
         if disk_mass_model == 'MDISK_10':
             kde = gaussian_kde(galacticus_output_mdisk10.T)
         elif disk_mass_model == 'MDISK_6810':
@@ -95,10 +105,12 @@ class SubstructureRealization(object):
         else:
             raise Exception('unknown disk mass model '+str(disk_mass_model))
         _, _, x, y, z, vx, vy, vz = kde.resample(num_halos)
+        infall_redshifts = invert_z_infall_cdf(np.linspace(min(z_infall_cdf), 1, len(x)))
         potentials = []
         orbits = []
         subhalo_masses = []
-        for counter, (x_i, y_i, z_i, vx_i, vy_i, vz_i, m) in enumerate(zip(x, y, z, vx, vy, vz, _subhalo_masses)):
+        for counter, (x_i, y_i, z_i, vx_i, vy_i, vz_i, m, z_inf) in enumerate(zip(x, y, z, vx, vy, vz,
+                                                                                  _subhalo_masses, infall_redshifts)):
             vR, vT, vz = rect_to_cyl_vec(vx_i, vy_i, vz_i, x_i, y_i, z_i)
             R, phi, z = rect_to_cyl(x_i, y_i, z_i)
             vxvv = [R * apu.kpc,
@@ -109,11 +121,18 @@ class SubstructureRealization(object):
                     phi * 180 / np.pi * apu.deg]
             c = sample_concentration_nfw(m)
             if density_profile == 'NFW':
-                pot = NFWPotential(mvir=m / 10 ** 12, conc=c)
+                if redshift_eval == 'INFALL':
+                    pot = NFWPotential(mvir=m / 10 ** 12, conc=c, cosmo=cosmo, z_eval=z_inf)
+                else:
+                    pot = NFWPotential(mvir=m / 10 ** 12, conc=c)
             elif density_profile == 'TWOPOWER':
-                z_eval_rho_crit = 0  # evaluate rho_crit at z=0 for now
-                rho_crit = un.Quantity(cosmo.critical_density(z_eval_rho_crit),
-                                       unit=un.Msun / un.kpc ** 3).value
+                if redshift_eval == 'INFALL':
+                    rho_crit = un.Quantity(cosmo.critical_density(z_inf),
+                                           unit=un.Msun / un.kpc ** 3).value
+                else:
+                    assert isinstance(redshift_eval, float) or isinstance(redshift_eval, int)
+                    rho_crit = un.Quantity(cosmo.critical_density(redshift_eval),
+                                           unit=un.Msun / un.kpc ** 3).value
                 r200 = (3 * m / (4 * np.pi * rho_crit * 200)) ** (1.0 / 3.0)
                 rs = r200 / c
                 _pot = TwoPowerSphericalPotential(1.0 * un.solMass,
