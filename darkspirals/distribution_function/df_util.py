@@ -25,7 +25,7 @@ def fit_sec_squared(rho, z):
     opt = minimize(_sec_square_func_to_min, x0=guess, args=(z, rho))
     return opt['x']
 
-def save_stack_deltaJ(delta_J_list, filename):
+def save_stack_deltaJ(delta_J_list, filename, fmt=None):
     """
     Create and save a numpy array with shape (phase_space_resolution, phase_space_resolution, N) where N is the length of
     delta_J_list, or the number of perturbations, and phase_space_resolution is the dimension along each axis of deltaJ
@@ -38,7 +38,10 @@ def save_stack_deltaJ(delta_J_list, filename):
     output = np.empty(output_shape)
     for i in range(0, len(delta_J_list)):
         output[:, :, i] = delta_J_list[i]
-    np.savetxt(filename, X=output.ravel())
+    if fmt is None:
+        np.savetxt(filename, X=output.ravel())
+    else:
+        np.savetxt(filename, X=output.ravel(), fmt=fmt)
 
 def _eval(points, disc, df):
     out = disc.action_angle_interp(points)

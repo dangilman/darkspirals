@@ -23,7 +23,7 @@ class SubstructureRealization(object):
 
     The main class methods include the class creation method "withDistanceCut" and the method "add_dwarf_galaxies".
     """
-    def __init__(self, disc, orbits, potentials, subhalo_masses=None, dwarf_galaxies_added=False):
+    def __init__(self, disc, orbits, potentials, subhalo_masses=None, dwarf_galaxies_added=False, class_attribute_dict=None):
         """
         Instantiate the class from an instance of Disc, and orbits/potentials/masses of perturbers
         :param disc: an instance of Disc class
@@ -32,6 +32,7 @@ class SubstructureRealization(object):
         :param potentials: a list of galpy potential instances, should be the same length as orbits
         :param subhalo_masses: the masses of the perturbers corresponding to potentials
         :param dwarf_galaxies_added: bool; keeps track of whether the class has had dwarf galaxies included upon creation
+        :param class_attribute_dict: a dictionary with some information that will be stored as a class attribute
         """
         self._disc = disc
         self._subhalo_orbits = orbits
@@ -41,6 +42,7 @@ class SubstructureRealization(object):
         self._subhalo_masses = subhalo_masses
         self._dwarf_galaxy_masses = []
         self.pop_dsphr = None
+        self.class_attribute_dict = class_attribute_dict
         self._dwarf_galaxies_added = dwarf_galaxies_added
         self._cosmo = FlatLambdaCDM(H0=70, Om0=0.3)
 
@@ -109,6 +111,7 @@ class SubstructureRealization(object):
         potentials = []
         orbits = []
         subhalo_masses = []
+        inner_slope_list = []
         for counter, (x_i, y_i, z_i, vx_i, vy_i, vz_i, m, z_inf) in enumerate(zip(x, y, z, vx, vy, vz,
                                                                                   _subhalo_masses, infall_redshifts)):
             vR, vT, vz = rect_to_cyl_vec(vx_i, vy_i, vz_i, x_i, y_i, z_i)
@@ -134,6 +137,7 @@ class SubstructureRealization(object):
                     pot = NFWPotential(amp=amp * un.solMass, a=rs * un.kpc)
                 else:
                     pot = NFWPotential(mvir=m / 10 ** 12, conc=c)
+                inner_slope = 1.0
             elif density_profile == 'TWOPOWER':
                 if redshift_eval == 'INFALL':
                     rho_crit = un.Quantity(cosmo.critical_density(z_inf),
@@ -144,16 +148,20 @@ class SubstructureRealization(object):
                                            unit=un.Msun / un.kpc ** 3).value
                 r200 = (3 * m / (4 * np.pi * rho_crit * 200)) ** (1.0 / 3.0)
                 rs = r200 / c
+                if callable(alpha_profile):
+                    inner_slope = alpha_profile()
+                else:
+                    inner_slope = alpha_profile
                 _pot = TwoPowerSphericalPotential(1.0 * un.solMass,
                                                   a=rs * un.kpc,
-                                                  alpha=alpha_profile,
+                                                  alpha=inner_slope,
                                                   beta=beta_profile)
                 _mass = mass_galpy(_pot,
                                    R=r200 * un.kpc)
                 amp = m / _mass
                 pot = TwoPowerSphericalPotential(amp * un.solMass,
                                                  a=rs * un.kpc,
-                                                 alpha=alpha_profile,
+                                                 alpha=inner_slope,
                                                  beta=beta_profile)
             else:
                 raise Exception('density profile must be etiher NFW or GNFW')
@@ -185,10 +193,12 @@ class SubstructureRealization(object):
                     potentials.append(pot)
                     subhalo_masses.append(m)
                     orb.set_closest_approach(impact_distance, impact_time)
+                    inner_slope_list.append(inner_slope)
             if verbose and counter % 25 == 0:
                 percent_done = int(100 * counter / len(_subhalo_masses))
                 print('completed ' + str(percent_done) + '% of force calculations... ')
-        return SubstructureRealization(disc, orbits, potentials, np.array(subhalo_masses))
+        return SubstructureRealization(disc, orbits, potentials, np.array(subhalo_masses),
+                                       class_attribute_dict={'inner_slope_values': inner_slope_list})
 
 
     def add_dwarf_galaxies(self, add_orbit_uncertainties=True,
