@@ -1,8 +1,11 @@
 import numpy as np
 from scipy.stats.kde import gaussian_kde
 from darkspirals.substructure.galacticus_subhalo_data import galacticus_output as galacticus_output_mdisk10
+from darkspirals.substructure.galacticus_subhalo_data import infall_redshift_samples as zinfall_10
+from darkspirals.substructure.galacticus_subhalo_data_v2 import galacticus_output as galacticus_output_mdisk10v2
+from darkspirals.substructure.galacticus_subhalo_data_v2 import infall_redshift_samples as zinfall_10v2
 from darkspirals.substructure.galacticus_subhalo_data_mdisk6810 import galacticus_output as galacticus_output_mdisk6810
-from darkspirals.substructure.galacticus_subhalo_data_mdisk6810 import infall_redshift_samples
+from darkspirals.substructure.galacticus_subhalo_data_mdisk6810 import infall_redshift_samples as zinfall_6810
 from galpy.util.coords import rect_to_cyl, rect_to_cyl_vec
 from darkspirals.orbit_util import integrate_single_orbit
 from galpy.potential import NFWPotential, TwoPowerSphericalPotential
@@ -61,7 +64,7 @@ class SubstructureRealization(object):
                                 dwarf_galaxies_added=False)
 
     @classmethod
-    def withDistanceCut(cls, disc, r_min, num_halos_scale=1.0,
+    def withDistanceCut(cls, disc, r_min,
                         norm=1200.0, alpha=-1.9, m_high=10 ** 8, m_low=10 ** 6,
                         num_halos=None, t_max=None, model_disc_disruption=False,
                         density_profile='NFW', alpha_profile=None, beta_profile=None,
@@ -70,7 +73,6 @@ class SubstructureRealization(object):
 
         :param disc: an instance of the Disc class
         :param r_min: the minimum distance a subhalo comes from the galactic center
-        :param num_halos_scale: linearly scales the number of halos, the same as increaing the normlaization
         :param norm: sets the overall normalization of the differential subhalo mass function
         :param alpha: the logarithmic slope of the differential subhalo mass function
         :param m_high: the upper mass limit for subhalos
@@ -90,22 +92,30 @@ class SubstructureRealization(object):
         :return: an instance of Realization that includes subhalos
         """
         cosmo = FlatLambdaCDM(H0=70, Om0=0.3)
+        if disk_mass_model == 'MDISK_10':
+            kde = gaussian_kde(galacticus_output_mdisk10.T)
+            infall_redshift_samples = zinfall_10
+            num_halos_scale = 1.0
+        elif disk_mass_model == 'MDISK_6810':
+            kde = gaussian_kde(galacticus_output_mdisk6810.T)
+            infall_redshift_samples = zinfall_6810
+            num_halos_scale = 1.0
+        elif disk_mass_model == 'MDISK_10v2':
+            kde = gaussian_kde(galacticus_output_mdisk10v2.T)
+            infall_redshift_samples = zinfall_10v2
+            num_halos_scale = 1.0
+        else:
+            raise Exception('unknown disk mass model ' + str(disk_mass_model))
+        h, z_infall = np.histogram(infall_redshift_samples, range=(0, 12), bins=40)
+        z_infall_cdf = np.cumsum(h)
+        z_infall_cdf = z_infall_cdf / z_infall_cdf[-1]
+        invert_z_infall_cdf = interp1d(z_infall_cdf, z_infall[0:-1])
         _subhalo_masses = sample_mass_function(num_halos_scale * norm,
                                                alpha,
                                                m_high,
                                                m_low,
                                                num_halos)
         num_halos = len(_subhalo_masses)
-        h, z_infall = np.histogram(infall_redshift_samples, range=(0, 12), bins=40)
-        z_infall_cdf = np.cumsum(h)
-        z_infall_cdf = z_infall_cdf / z_infall_cdf[-1]
-        invert_z_infall_cdf = interp1d(z_infall_cdf, z_infall[0:-1])
-        if disk_mass_model == 'MDISK_10':
-            kde = gaussian_kde(galacticus_output_mdisk10.T)
-        elif disk_mass_model == 'MDISK_6810':
-            kde = gaussian_kde(galacticus_output_mdisk6810.T)
-        else:
-            raise Exception('unknown disk mass model '+str(disk_mass_model))
         _, _, x, y, z, vx, vy, vz = kde.resample(num_halos)
         infall_redshifts = invert_z_infall_cdf(np.linspace(min(z_infall_cdf), 1, len(x)))
         potentials = []
